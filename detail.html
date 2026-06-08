@@ -179,8 +179,11 @@
           <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
             ${canAction ? `<button class="btn btn-success" onclick="openModal('claim-modal')">${actionLabel}</button>` : ''}
             ${canChat ? `<button class="btn btn-secondary" onclick="openChat()">💬 私訊發布者</button>` : ''}
-            ${isAdminUser ? `
+            ${isAuthor ? `
               <button class="btn btn-danger btn-sm" onclick="adminDelete()">🗑 刪除貼文</button>
+            ` : ''}
+            ${isAdminUser ? `
+              ${!isAuthor ? `<button class="btn btn-danger btn-sm" onclick="adminDelete()">🗑 刪除貼文</button>` : ''}
               ${post.status === STATUS.REVIEWING ? `<button class="btn btn-success btn-sm" onclick="adminClose()">✅ 結案</button>` : ''}
             ` : ''}
             ${!session ? `<p class="text-sm text-muted" style="align-self:center;"><a href="login.html">登入</a>後才能${post.type === 'found' ? '認領' : '回報'}或私訊</p>` : ''}
