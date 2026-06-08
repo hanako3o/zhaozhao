@@ -25,6 +25,11 @@
         <input type="text" id="student-id" placeholder="例：B11234001" autocomplete="username">
       </div>
 
+      <div class="form-group" id="admin-key-group" style="display:none;">
+        <label for="admin-key">管理員金鑰 <span class="req">*</span></label>
+        <input type="password" id="admin-key" placeholder="請輸入管理金鑰">
+      </div>
+
       <div class="form-group">
         <label for="password">密碼</label>
         <input type="password" id="password" placeholder="請輸入密碼" autocomplete="current-password">
@@ -57,10 +62,29 @@
     box.textContent = msg;
   }
 
+  const idInput = document.getElementById('student-id');
+  const adminKeyGroup = document.getElementById('admin-key-group');
+  
+  idInput.addEventListener('input', () => {
+    if (idInput.value.trim().toLowerCase() === 'admin') {
+      adminKeyGroup.style.display = 'block';
+    } else {
+      adminKeyGroup.style.display = 'none';
+    }
+  });
+
   async function handleLogin() {
-    const id = document.getElementById('student-id').value.trim();
+    const id = idInput.value.trim();
     const pw = document.getElementById('password').value;
     if (!id || !pw) { showAlert('請填寫學號與密碼'); return; }
+
+    if (id.toLowerCase() === 'admin') {
+      const key = document.getElementById('admin-key').value.trim();
+      if (key !== 'zhaozhao123') {
+        showAlert('管理員金鑰錯誤，拒絕登入');
+        return;
+      }
+    }
 
     const result = await loginUser(id, pw);
     if (result.ok) {
