@@ -210,9 +210,18 @@
     }
     document.getElementById(id).classList.remove('hidden');
   }
+  let chatInterval = null;
+
   function closeModal(id) {
     document.getElementById(id).classList.add('hidden');
-    if (id === 'chat-modal') { activePartner = null; renderDetail(); }
+    if (id === 'chat-modal') { 
+      activePartner = null; 
+      renderDetail(); 
+      if (chatInterval) {
+        clearInterval(chatInterval);
+        chatInterval = null;
+      }
+    }
   }
 
   async function submitClaim() {
@@ -287,6 +296,8 @@
     activePartner = { id: partnerId, name: partnerName };
     openModal('chat-modal');
     loadMessages();
+    if (chatInterval) clearInterval(chatInterval);
+    chatInterval = setInterval(loadMessages, 3000);
     setTimeout(() => document.getElementById('chat-input').focus(), 100);
   }
 
@@ -306,6 +317,8 @@
   function openChat() {
     openModal('chat-modal');
     loadMessages();
+    if (chatInterval) clearInterval(chatInterval);
+    chatInterval = setInterval(loadMessages, 3000);
     setTimeout(() => document.getElementById('chat-input').focus(), 100);
   }
 
@@ -318,6 +331,9 @@
       container.innerHTML = '<div style="text-align:center;color:var(--ink-400);font-size:0.85rem;padding:1rem;">還沒有訊息，發送第一則吧！</div>';
       return;
     }
+    
+    const wasScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 15;
+    
     container.innerHTML = msgs.map(m => {
       const isMe = m.senderId === session.id;
       return `
@@ -329,7 +345,10 @@
         </div>
       `;
     }).join('');
-    container.scrollTop = container.scrollHeight;
+    
+    if (wasScrolledToBottom || container.scrollTop === 0) {
+      container.scrollTop = container.scrollHeight;
+    }
   }
 
   async function sendMsg() {
