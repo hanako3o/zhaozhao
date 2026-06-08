@@ -20,6 +20,16 @@
 
       <div id="alert-box" class="hidden"></div>
 
+      <!-- 頭像上傳 -->
+      <div style="display:flex; flex-direction:column; align-items:center; gap:0.5rem; margin-bottom:1.25rem;">
+        <div id="reg-avatar" onclick="document.getElementById('reg-avatar-file').click()"
+          style="width:72px;height:72px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:800;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 3px 10px rgba(23,81,144,0.3);">
+          <span id="reg-avatar-label">🎒</span>
+        </div>
+        <input type="file" id="reg-avatar-file" accept="image/*" class="hidden" onchange="handleRegAvatar(event)">
+        <span style="font-size:0.75rem;color:var(--ink-500);">點擊上傳大頭貼（選填）</span>
+      </div>
+
       <div class="form-group">
         <label for="student-id">學號</label>
         <input type="text" id="student-id" placeholder="例：B11234001" autocomplete="username">
@@ -58,10 +68,29 @@
 
   if (isLoggedIn()) window.location.href = 'index.html';
 
+  let regAvatarData = null;
+
   function showAlert(msg, type = 'danger') {
     const box = document.getElementById('alert-box');
     box.className = `alert alert-${type}`;
     box.textContent = msg;
+  }
+
+  async function handleRegAvatar(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const compressed = await compressProfileAvatar(e.target.result);
+      regAvatarData = compressed;
+      const el = document.getElementById('reg-avatar');
+      el.style.backgroundImage = `url('${compressed}')`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      document.getElementById('reg-avatar-label').textContent = '';
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   }
 
   async function handleRegister() {
@@ -74,7 +103,7 @@
     if (pw.length < 6) { showAlert('密碼至少需要 6 個字元'); return; }
     if (pw !== pw2) { showAlert('兩次密碼不一致'); return; }
 
-    const result = await registerUser(id, pw, name);
+    const result = await registerUser(id, pw, name, regAvatarData);
     if (result.ok) {
       showAlert('✅ 註冊成功！即將前往登入頁面...', 'success');
       setTimeout(() => window.location.href = 'login.html', 1500);
