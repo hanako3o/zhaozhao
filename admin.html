@@ -200,17 +200,20 @@
             const lastText = c.lastMessage ? c.lastMessage.text : '（暫無訊息）';
             const lastTimeStr = c.lastMessage ? timeAgo(c.lastMessage.time) : timeAgo(c.lastTime);
             return `
-              <div class="conv-item" onclick="openGlobalChat('${partner.id}', '${partner.name}', 'support', '與 ${partner.name} 的客服對話')">
-                <div class="conv-dot">👤</div>
-                <div style="flex:1;">
-                  <div class="d-flex align-center justify-between" style="margin-bottom:0.2rem;">
-                    <strong>${partner.name} <span class="text-muted text-sm">（學號: ${partner.id}）</span></strong>
-                    <span class="text-muted text-sm">${lastTimeStr}</span>
-                  </div>
-                  <div class="text-muted text-sm" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px;">
-                    ${lastText}
+              <div class="conv-item" onclick="openGlobalChat('${partner.id}', '${partner.name}', 'support', '與 ${partner.name} 的客服對話')" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <div style="display:flex; align-items:center; gap:0.9rem; flex:1; overflow:hidden;">
+                  <div class="conv-dot">👤</div>
+                  <div style="flex:1; overflow:hidden;">
+                    <div class="d-flex align-center justify-between" style="margin-bottom:0.2rem;">
+                      <strong>${partner.name} <span class="text-muted text-sm">（學號: ${partner.id}）</span></strong>
+                      <span class="text-muted text-sm">${lastTimeStr}</span>
+                    </div>
+                    <div class="text-muted text-sm" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px;">
+                      ${lastText}
+                    </div>
                   </div>
                 </div>
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeSupportConv('${c.key}', '${partner.name}')" style="margin-left:1rem; flex-shrink:0;">刪除對話</button>
               </div>
             `;
           }).join('')}
@@ -279,6 +282,18 @@
         await initAdmin();
       } else {
         alert('刪除失敗，請再試一次');
+      }
+    }
+  }
+
+  async function removeSupportConv(key, partnerName) {
+    if (confirm(`確定要刪除與「${partnerName}」的整段客服對話與所有訊息嗎？此動作將會刪除所有聊天紀錄且無法復原。`)) {
+      const ok = await deleteConversation(key);
+      if (ok) {
+        alert('對話刪除成功');
+        await initAdmin();
+      } else {
+        alert('對話刪除失敗，請再試一次');
       }
     }
   }

@@ -122,6 +122,27 @@ async function deleteUser(studentId) {
   return true;
 }
 
+async function deleteConversation(key) {
+  const { error: msgError } = await supabaseClient
+    .from('messages')
+    .delete()
+    .eq('conversation_key', key);
+  if (msgError) {
+    console.error("Error deleting messages for conversation:", msgError);
+    return false;
+  }
+  
+  const { error: convError } = await supabaseClient
+    .from('conversations')
+    .delete()
+    .eq('key', key);
+  if (convError) {
+    console.error("Error deleting conversation:", convError);
+    return false;
+  }
+  return true;
+}
+
 // ── 貼文 ──
 function mapPost(p) {
   if (!p) return null;
