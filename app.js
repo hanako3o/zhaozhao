@@ -113,6 +113,18 @@ async function getUsers() {
 // ── 貼文 ──
 function mapPost(p) {
   if (!p) return null;
+  let images = [];
+  if (p.image_url) {
+    if (p.image_url.startsWith('[') && p.image_url.endsWith(']')) {
+      try {
+        images = JSON.parse(p.image_url);
+      } catch (e) {
+        images = [p.image_url];
+      }
+    } else {
+      images = [p.image_url];
+    }
+  }
   return {
     id: p.id,
     type: p.type,
@@ -120,7 +132,7 @@ function mapPost(p) {
     category: p.category,
     location: p.location,
     description: p.description,
-    imageUrl: p.image_url,
+    imageUrl: images,
     authorId: p.author_id,
     authorName: p.author_name,
     status: p.status,
@@ -163,7 +175,7 @@ async function addPost(post) {
     category: post.category,
     location: post.location,
     description: post.description,
-    image_url: post.imageUrl || '',
+    image_url: Array.isArray(post.imageUrl) ? JSON.stringify(post.imageUrl) : (post.imageUrl || ''),
     author_id: session ? session.id : 'anonymous',
     author_name: session ? session.name : '匿名',
     status: STATUS.PENDING,
@@ -475,7 +487,7 @@ function renderNavbar(activePage) {
           <div class="avatar">${initial}</div>
           <span class="nav-profile-text">個人中心</span>
         </a>
-        <button onclick="handleLogout()">登出</button>
+        <button onclick="handleLogout()" style="color:var(--danger);font-weight:500;">登出</button>
       </div>
     `;
   } else {
@@ -485,12 +497,21 @@ function renderNavbar(activePage) {
     `;
   }
 
+  const mobileAvatar = session ? `
+    <a href="profile.html" class="mobile-avatar" title="個人中心" style="margin-right: 0.5rem;">
+      <div class="avatar" style="width:32px;height:32px;font-size:0.85rem;">${session.name.charAt(0).toUpperCase()}</div>
+    </a>
+  ` : '';
+
   navbar.innerHTML = `
     <a class="navbar-brand" href="index.html">
       <img src="logo-icon.png" alt="找找" class="navbar-logo">
       <img src="logo-text.png" alt="找找" class="navbar-brand-text-logo">
     </a>
-    <button class="navbar-toggle" id="navbar-toggle" aria-label="選單" onclick="toggleNavMenu()">☰</button>
+    <div style="display: flex; align-items: center;">
+      ${mobileAvatar}
+      <button class="navbar-toggle" id="navbar-toggle" aria-label="選單" onclick="toggleNavMenu()">☰</button>
+    </div>
     <div class="navbar-links" id="navbar-links">
       ${links}
       ${rightSection}
@@ -512,6 +533,7 @@ document.addEventListener('click', function(e) {
 });
 
 async function handleLogout() {
+  if (!confirm('確定要登出嗎？')) return;
   await logoutUser();
   window.location.href = 'index.html';
 }
@@ -546,4 +568,92 @@ function translateAuthError(msg) {
 // ── 示範資料 (已被資料庫 Seed 替代) ──
 function seedDemoData() {
   // Supabase 資料庫已包含種子資料，免去前端種子邏輯
+}
+
+// ── Lightbox 全螢幕圖片檢視 ──
+let lightboxImages = [];
+let lightboxCurrentIndex = 0;
+
+function openLightbox(images, index = 0) {
+  lightboxImages = images || [];
+  lightboxCurrentIndex = index;
+  
+  let lightbox = document.getElementById('lightbox-modal');
+  if (!lightbox) {
+    lightbox = document.createElement('div');
+    lightbox.id = 'lightbox-modal';
+    lightbox.className = 'lightbox-modal';
+    lightbox.innerHTML = `
+      <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+      <div class="lightbox-content-wrap">
+        <button class="lightbox-arrow lightbox-arrow-left" onclick="lightboxPrev()">&#10094;</button>
+        <img class="lightbox-img" id="lightbox-target-img" src="" alt="放大圖">
+        <button class="lightbox-arrow lightbox-arrow-right" onclick="lightboxNext()">&#10095;</button>
+      </div>
+      <div class="lightbox-counter" id="lightbox-counter"></div>
+    `;
+    document.body.appendChild(lightbox);
+    
+    // 監聽鍵盤事件
+    document.addEventListener('keydown', function(e) {
+      if (!lightbox.classList.contains('active')) return;
+      if (e.key === 'ArrowLeft') lightboxPrev();
+      if (e.key === 'ArrowRight') lightboxNext();
+      if (e.key === 'Escape') closeLightbox();
+    });
+    
+    // 點擊背景關閉
+    lightbox.addEventListener('click', function(e) {
+      if (e.target === lightbox || e.target.classList.contains('lightbox-content-wrap')) {
+        closeLightbox();
+      }
+    });
+  }
+  
+  lightbox.classList.add('active');
+  updateLightbox();
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById('lightbox-modal');
+  if (lightbox) {
+    lightbox.classList.remove('active');
+  }
+}
+
+function updateLightbox() {
+  const img = document.getElementById('lightbox-target-img');
+  const counter = document.getElementById('lightbox-counter');
+  const leftArrow = document.querySelector('.lightbox-arrow-left');
+  const rightArrow = document.querySelector('.lightbox-arrow-right');
+  
+  if (!img || !lightboxImages || lightboxImages.length === 0) return;
+  
+  img.src = lightboxImages[lightboxCurrentIndex];
+  
+  // 更新計數器
+  if (counter) {
+    counter.textContent = `${lightboxCurrentIndex + 1} / ${lightboxImages.length}`;
+  }
+  
+  // 如果只有一張圖，隱藏箭頭；否則顯示
+  if (lightboxImages.length <= 1) {
+    if (leftArrow) leftArrow.style.display = 'none';
+    if (rightArrow) rightArrow.style.display = 'none';
+  } else {
+    if (leftArrow) leftArrow.style.display = 'block';
+    if (rightArrow) rightArrow.style.display = 'block';
+  }
+}
+
+function lightboxPrev() {
+  if (!lightboxImages || lightboxImages.length <= 1) return;
+  lightboxCurrentIndex = (lightboxCurrentIndex - 1 + lightboxImages.length) % lightboxImages.length;
+  updateLightbox();
+}
+
+function lightboxNext() {
+  if (!lightboxImages || lightboxImages.length <= 1) return;
+  lightboxCurrentIndex = (lightboxCurrentIndex + 1) % lightboxImages.length;
+  updateLightbox();
 }

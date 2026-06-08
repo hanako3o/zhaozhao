@@ -73,6 +73,7 @@
   const session = getSession();
   let currentPost = null;
   let myConvs = [];
+  let activeImageIndex = 0;
 
   async function initDetail() {
     if (!postId) {
@@ -117,11 +118,21 @@
       <a href="list.html" class="btn btn-secondary btn-sm mb-2">← 返回列表</a>
 
       <div class="card mt-2">
-        ${post.imageUrl ? `
-          <div style="max-height:360px; overflow:hidden; background:var(--sand-100);">
-            <img src="${post.imageUrl}" alt="${post.title}"
-              style="width:100%; max-height:360px; object-fit:cover;"
-              onerror="this.parentElement.innerHTML='<div style=height:120px;display:flex;align-items:center;justify-content:center;font-size:3rem;>${categoryIcon(post.category)}</div>'">
+        ${post.imageUrl && post.imageUrl.length > 0 ? `
+          <div class="detail-gallery">
+            <div class="detail-main-img-wrap" onclick="openLightbox(currentPost.imageUrl, activeImageIndex)">
+              <img id="detail-main-img" src="${post.imageUrl[0]}" alt="${post.title}"
+                onerror="this.parentElement.innerHTML='<div style=height:120px;display:flex;align-items:center;justify-content:center;font-size:3rem;>${categoryIcon(post.category)}</div>'">
+            </div>
+            ${post.imageUrl.length > 1 ? `
+              <div class="detail-thumbnails-grid">
+                ${post.imageUrl.map((img, idx) => `
+                  <div class="detail-thumb-item ${idx === 0 ? 'active' : ''}" onclick="switchDetailImage(${idx})" data-index="${idx}">
+                    <img src="${img}" alt="縮圖">
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
           </div>
         ` : `
           <div style="height:120px; background:var(--sand-100); display:flex; align-items:center; justify-content:center; font-size:3.5rem;">
@@ -340,6 +351,24 @@
       await updatePostStatus(postId, STATUS.CLOSED);
       await initDetail();
     }
+  }
+
+  function switchDetailImage(index) {
+    activeImageIndex = index;
+    const mainImg = document.getElementById('detail-main-img');
+    if (mainImg && currentPost.imageUrl && currentPost.imageUrl[index]) {
+      mainImg.src = currentPost.imageUrl[index];
+    }
+    
+    // Update active state in thumbnail elements
+    document.querySelectorAll('.detail-thumb-item').forEach(item => {
+      const itemIdx = parseInt(item.getAttribute('data-index'), 10);
+      if (itemIdx === index) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
   }
 
   initDetail();

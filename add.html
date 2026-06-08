@@ -67,8 +67,8 @@
           <div class="upload-icon">📷</div>
           <p>點擊上傳圖片<br><span style="font-size:0.78rem;">支援 JPG / PNG，建議小於 2MB</span></p>
         </div>
-        <input type="file" id="image-file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
-        <div id="img-preview-wrap" class="text-center"></div>
+        <input type="file" id="image-file" accept="image/*" class="hidden" multiple onchange="handleImageUpload(event)">
+        <div id="img-preview-wrap" style="margin-top: 0.75rem;"></div>
       </div>
 
       <div id="secret-field" class="form-group hidden">
@@ -95,7 +95,7 @@
   }
 
   let currentType = 'found';
-  let uploadedImage = '';
+  let uploadedImages = [];
 
   // 從 URL 取得預設類型
   const urlType = new URLSearchParams(window.location.search).get('type');
@@ -110,30 +110,77 @@
   }
 
   function handleImageUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      showAlert('圖片太大囉，請選擇小於 3MB 的圖片');
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    if (uploadedImages.length + files.length > 5) {
+      showAlert('最多只能上傳 5 張圖片！已為您載入剩餘額度的圖片', 'warning');
+    }
+
+    const maxNewFiles = 5 - uploadedImages.length;
+    const filesToUpload = Array.from(files).slice(0, maxNewFiles);
+
+    let loadedCount = 0;
+    if (filesToUpload.length === 0) {
+      document.getElementById('image-file').value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = e => {
-      uploadedImage = e.target.result;
-      document.getElementById('img-preview-wrap').innerHTML = `
-        <div class="upload-preview">
-          <img src="${uploadedImage}" alt="預覽">
-          <button type="button" class="upload-remove" onclick="removeImage()">✕</button>
-        </div>`;
-      document.getElementById('upload-zone').style.display = 'none';
-    };
-    reader.readAsDataURL(file);
+
+    filesToUpload.forEach(file => {
+      if (file.size > 3 * 1024 * 1024) {
+        showAlert(`「${file.name}」太大囉，請選擇小於 3MB 的圖片`, 'danger');
+        loadedCount++;
+        if (loadedCount === filesToUpload.length) {
+          renderPreviews();
+          document.getElementById('image-file').value = '';
+        }
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        uploadedImages.push(e.target.result);
+        loadedCount++;
+        if (loadedCount === filesToUpload.length) {
+          renderPreviews();
+          document.getElementById('image-file').value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
-  function removeImage() {
-    uploadedImage = '';
-    document.getElementById('img-preview-wrap').innerHTML = '';
-    document.getElementById('image-file').value = '';
-    document.getElementById('upload-zone').style.display = 'block';
+  function renderPreviews() {
+    const wrap = document.getElementById('img-preview-wrap');
+    if (uploadedImages.length === 0) {
+      wrap.innerHTML = '';
+      document.getElementById('upload-zone').style.display = 'block';
+      return;
+    }
+
+    let gridHtml = '<div class="image-preview-grid">';
+    uploadedImages.forEach((img, idx) => {
+      gridHtml += `
+        <div class="image-preview-item">
+          <img src="${img}" alt="預覽">
+          <button type="button" class="image-preview-delete" onclick="removeImage(${idx})">✕</button>
+        </div>
+      `;
+    });
+    gridHtml += '</div>';
+
+    wrap.innerHTML = gridHtml;
+
+    if (uploadedImages.length >= 5) {
+      document.getElementById('upload-zone').style.display = 'none';
+    } else {
+      document.getElementById('upload-zone').style.display = 'block';
+    }
+  }
+
+  function removeImage(idx) {
+    uploadedImages.splice(idx, 1);
+    renderPreviews();
   }
 
   function showAlert(msg, type = 'danger') {
@@ -160,7 +207,7 @@
       const id = await addPost({
         type: currentType,
         title, category, location, description,
-        imageUrl: uploadedImage,
+        imageUrl: uploadedImages,
         secretHint,
         authorId: session.id,
         authorName: session.name,

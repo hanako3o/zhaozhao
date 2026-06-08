@@ -69,10 +69,13 @@
   function postCard(p) {
     return `
       <div class="item-card" onclick="location.href='detail.html?id=${p.id}'">
-        <div class="item-card-img">
-          ${p.imageUrl
-            ? `<img src="${p.imageUrl}" alt="${p.title}" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
+        <div class="item-card-img" style="position:relative;">
+          ${p.imageUrl && p.imageUrl.length > 0
+            ? `<img src="${p.imageUrl[0]}" alt="${p.title}" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
             : `<span style="font-size:3rem;">${categoryIcon(p.category)}</span>`}
+          ${p.imageUrl && p.imageUrl.length > 1
+            ? `<div class="image-badge">📷 ${p.imageUrl.length}</div>`
+            : ''}
         </div>
         <div class="item-card-body">
           <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.55rem;">

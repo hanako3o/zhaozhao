@@ -23,8 +23,8 @@
   <p>撿到東西？弄丟了什麼？在這裡發布一則貼文，<br>讓校園裡的每件物品都能順利回家 🏠</p>
   <div class="banner-actions">
     <a href="add.html?type=found" class="btn btn-white btn-lg" id="btn-found">✋ 我撿到東西</a>
-    <a href="add.html?type=lost" class="btn btn-outline btn-lg" id="btn-lost">😥 我掉了東西</a>
-    <a href="list.html" class="btn btn-outline btn-lg">📋 瀏覽全部</a>
+    <a href="add.html?type=lost" class="btn btn-white btn-lg" id="btn-lost">😥 我掉了東西</a>
+    <a href="list.html" class="btn btn-white btn-lg">📋 瀏覽全部</a>
   </div>
 </div>
 
@@ -82,10 +82,13 @@
     } else {
       container.innerHTML = recent.map(p => `
         <div class="item-card" onclick="location.href='detail.html?id=${p.id}'">
-          <div class="item-card-img">
-            ${p.imageUrl
-              ? `<img src="${p.imageUrl}" alt="${p.title}" onerror="this.parentElement.textContent='${categoryIcon(p.category)}'">`
+          <div class="item-card-img" style="position:relative;">
+            ${p.imageUrl && p.imageUrl.length > 0
+              ? `<img src="${p.imageUrl[0]}" alt="${p.title}" onerror="this.parentElement.textContent='${categoryIcon(p.category)}'">`
               : `<span>${categoryIcon(p.category)}</span>`}
+            ${p.imageUrl && p.imageUrl.length > 1
+              ? `<div class="image-badge">📷 ${p.imageUrl.length}</div>`
+              : ''}
           </div>
           <div class="item-card-body">
             <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem;">
