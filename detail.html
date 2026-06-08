@@ -128,7 +128,7 @@
               <div class="detail-thumbnails-grid">
                 ${post.imageUrl.map((img, idx) => `
                   <div class="detail-thumb-item ${idx === 0 ? 'active' : ''}" onclick="switchDetailImage(${idx})" data-index="${idx}">
-                    <img src="${img}" alt="縮圖">
+                    <img src="${img}" alt="縮圖" loading="lazy">
                   </div>
                 `).join('')}
               </div>

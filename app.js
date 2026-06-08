@@ -177,7 +177,8 @@ async function getPosts() {
   const { data, error } = await supabaseClient
     .from('posts')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(50);
   if (error) {
     console.error("Error fetching posts:", error);
     return [];
