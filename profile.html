@@ -33,7 +33,7 @@
 </div>
 
 <!-- 編輯個人資料 Modal -->
-<div class="modal-overlay hidden" id="edit-profile-modal">
+<div class="modal-overlay hidden" id="edit-profile-modal" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="modal" style="max-width:420px;">
     <div class="modal-header">
       <h3>✏️ 編輯個人資料</h3>
@@ -273,7 +273,7 @@
     document.getElementById('edit-name-input').disabled = remaining <= 0;
 
     document.getElementById('edit-alert').style.display = 'none';
-    openModal('edit-profile-modal');
+    document.getElementById('edit-profile-modal').classList.remove('hidden');
   }
 
   async function handleAvatarUpload(event) {
@@ -294,24 +294,6 @@
     event.target.value = '';
   }
 
-  function compressProfileAvatar(dataUrl) {
-    return new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => {
-        const size = 400;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        // crop center square
-        const min = Math.min(img.width, img.height);
-        const sx = (img.width - min) / 2;
-        const sy = (img.height - min) / 2;
-        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
-      };
-      img.src = dataUrl;
-    });
-  }
 
   async function saveProfile() {
     const alertEl = document.getElementById('edit-alert');
@@ -340,7 +322,7 @@
     }
 
     if (Object.keys(updates).length === 0) {
-      closeModal('edit-profile-modal');
+      document.getElementById('edit-profile-modal').classList.add('hidden');
       return;
     }
 
@@ -357,7 +339,7 @@
       profileData.nameChangeLog = [...log, Date.now()];
     }
 
-    closeModal('edit-profile-modal');
+    document.getElementById('edit-profile-modal').classList.add('hidden');
     renderHero(profileData, true);
   }
 

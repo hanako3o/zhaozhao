@@ -25,7 +25,25 @@ const SUPABASE_KEY = 'sb_publishable_XxWtDTa2LsNfqYhpHiYeAA_GHNBn1tL';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── 用戶 ──
-async function registerUser(studentId, password, name) {
+function compressProfileAvatar(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const size = 400;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = dataUrl;
+  });
+}
+
+async function registerUser(studentId, password, name, avatarUrl = null) {
   try {
     const { data, error } = await supabaseClient.auth.signUp({
       email: studentId + '@zhaozhao.com',
@@ -38,17 +56,15 @@ async function registerUser(studentId, password, name) {
       }
     });
     if (error) return { ok: false, msg: error.message };
-    
-    // Also write to profiles table
+
     if (data && data.user) {
+      const profileData = { id: data.user.id, student_id: studentId, name: name };
+      if (avatarUrl) profileData.avatar_url = avatarUrl;
       const { error: profileError } = await supabaseClient
         .from('profiles')
-        .insert({
-          id: data.user.id,
-          student_id: studentId,
-          name: name
-        });
+        .insert(profileData);
       if (profileError) console.error("Error creating profile:", profileError);
+      if (avatarUrl) localStorage.setItem(`zhaozhao-avatar-${studentId}`, avatarUrl);
     }
     return { ok: true };
   } catch (err) {
@@ -549,8 +565,8 @@ function renderNavbar(activePage) {
         <a href="add.html" class="btn btn-primary btn-sm">+ 新增</a>
         <a href="profile.html" title="個人中心" class="nav-profile" style="display:flex;align-items:center;gap:0.5rem;padding:0;">
           ${session.avatarUrl
-            ? `<img src="${session.avatarUrl}" alt="${initial}" class="avatar" style="object-fit:cover;cursor:pointer;" onclick="event.preventDefault();showAvatarModal('${session.avatarUrl}','${initial}')">`
-            : `<div class="avatar" style="cursor:pointer;" onclick="event.preventDefault();showAvatarModal(null,'${initial}')">${initial}</div>`
+            ? `<img src="${session.avatarUrl}" alt="${initial}" class="avatar" style="object-fit:cover;">`
+            : `<div class="avatar">${initial}</div>`
           }
           <span class="nav-profile-text">個人中心</span>
         </a>
