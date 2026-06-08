@@ -793,10 +793,10 @@ async function loadGlobalChatMessages() {
   container.innerHTML = msgs.map(m => {
     const isMe = m.senderId === session.id;
     return `
-      <div style="align-self: ${isMe ? 'flex-end' : 'flex-start'}; max-width: 80%;">
-        <div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin: 0; display: inline-block;">
+      <div style="display: flex; flex-direction: column; align-items: ${isMe ? 'flex-end' : 'flex-start'}; width: 100%;">
+        <div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin: 0;">
           ${m.text}
-          <div class="chat-bubble-meta" style="font-size:0.7rem; opacity:0.8; margin-top:0.2rem; text-align:${isMe ? 'right' : 'left'};">${isMe ? '你' : m.senderName} · ${timeAgo(m.time)}</div>
+          <div class="chat-bubble-meta" style="text-align:${isMe ? 'right' : 'left'};">${isMe ? '你' : m.senderName} · ${timeAgo(m.time)}</div>
         </div>
       </div>
     `;
