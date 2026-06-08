@@ -110,6 +110,18 @@ async function getUsers() {
   }));
 }
 
+async function deleteUser(studentId) {
+  const { error } = await supabaseClient
+    .from('profiles')
+    .delete()
+    .eq('student_id', studentId);
+  if (error) {
+    console.error("Error deleting user profile:", error);
+    return false;
+  }
+  return true;
+}
+
 // ── 貼文 ──
 function mapPost(p) {
   if (!p) return null;
@@ -333,8 +345,13 @@ async function ensureConversation(postId, userA, nameA, userB, nameB) {
     };
   }
   
-  const post = await getPost(postId);
-  const postTitle = post ? post.title : '（已刪除貼文）';
+  let postTitle = '（已刪除貼文）';
+  if (postId === 'support') {
+    postTitle = '客服對話';
+  } else {
+    const post = await getPost(postId);
+    if (post) postTitle = post.title;
+  }
   
   const newConv = {
     key: key,
@@ -487,6 +504,7 @@ function renderNavbar(activePage) {
           <div class="avatar">${initial}</div>
           <span class="nav-profile-text">個人中心</span>
         </a>
+        <a href="#" class="nav-support" onclick="openGlobalChat('admin', '管理員', 'support', '聯絡客服'); return false;">客服</a>
         <button onclick="handleLogout()" style="color:var(--danger);font-weight:500;">登出</button>
       </div>
     `;
@@ -656,4 +674,130 @@ function lightboxNext() {
   if (!lightboxImages || lightboxImages.length <= 1) return;
   lightboxCurrentIndex = (lightboxCurrentIndex + 1) % lightboxImages.length;
   updateLightbox();
+}
+
+// ── 客服與私訊全域模態框 ──
+let globalChatPartnerId = null;
+let globalChatPartnerName = null;
+let globalChatPostId = 'support';
+let globalChatInterval = null;
+
+function openGlobalChat(partnerId, partnerName, postId = 'support', title = '客服諮詢') {
+  const session = getSession();
+  if (!session) {
+    alert('請先登入才能使用此功能');
+    window.location.href = 'login.html';
+    return;
+  }
+  
+  // Prevent chatting with yourself
+  if (session.id === partnerId) {
+    alert('這是您自己的帳號，無法進行對話。');
+    return;
+  }
+  
+  globalChatPartnerId = partnerId;
+  globalChatPartnerName = partnerName;
+  globalChatPostId = postId;
+  
+  let modal = document.getElementById('global-chat-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'global-chat-modal';
+    modal.className = 'modal-overlay';
+    modal.style.zIndex = '1010';
+    modal.innerHTML = `
+      <div class="modal" style="max-width:520px;">
+        <div class="modal-header">
+          <h3 id="global-chat-title">💬 ${title}</h3>
+          <button class="modal-close" onclick="closeGlobalChat()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="chat-messages" id="global-chat-messages" style="height:300px; overflow-y:auto; padding:0.8rem; display:flex; flex-direction:column; gap:0.6rem; background:var(--sand-50); border-radius:var(--radius); border:1px solid var(--sand-100);"></div>
+          <div class="chat-input-row" style="display:flex; gap:0.5rem; margin-top:0.75rem;">
+            <input type="text" id="global-chat-input" placeholder="輸入訊息..." style="flex:1;" onkeydown="if(event.key==='Enter') sendGlobalChatMsg()">
+            <button class="btn btn-primary" onclick="sendGlobalChatMsg()">傳送</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        closeGlobalChat();
+      }
+    });
+  }
+  
+  document.getElementById('global-chat-title').textContent = `💬 ${title}`;
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+  
+  loadGlobalChatMessages();
+  
+  if (globalChatInterval) clearInterval(globalChatInterval);
+  globalChatInterval = setInterval(loadGlobalChatMessages, 3000);
+  
+  setTimeout(() => {
+    const input = document.getElementById('global-chat-input');
+    if (input) input.focus();
+  }, 100);
+}
+
+function closeGlobalChat() {
+  const modal = document.getElementById('global-chat-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  if (globalChatInterval) {
+    clearInterval(globalChatInterval);
+    globalChatInterval = null;
+  }
+}
+
+async function loadGlobalChatMessages() {
+  if (!globalChatPartnerId) return;
+  const session = getSession();
+  if (!session) return;
+  
+  const container = document.getElementById('global-chat-messages');
+  if (!container) return;
+  
+  const msgs = await getMessages(globalChatPostId, session.id, globalChatPartnerId);
+  
+  const wasScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 15;
+  
+  container.innerHTML = msgs.map(m => {
+    const isMe = m.senderId === session.id;
+    return `
+      <div style="align-self: ${isMe ? 'flex-end' : 'flex-start'}; max-width: 80%;">
+        <div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin: 0; display: inline-block;">
+          ${m.text}
+          <div class="chat-bubble-meta" style="font-size:0.7rem; opacity:0.8; margin-top:0.2rem; text-align:${isMe ? 'right' : 'left'};">${isMe ? '你' : m.senderName} · ${timeAgo(m.time)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  if (wasScrolledToBottom || container.scrollTop === 0) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+async function sendGlobalChatMsg() {
+  const input = document.getElementById('global-chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  
+  const session = getSession();
+  if (!session) return;
+  
+  const ok = await sendMessage(globalChatPostId, session.id, session.name, globalChatPartnerId, globalChatPartnerName, text);
+  if (ok) {
+    input.value = '';
+    await loadGlobalChatMessages();
+  }
 }

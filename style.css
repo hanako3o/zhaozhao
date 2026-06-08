@@ -879,3 +879,41 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
   height: 100%;
   object-fit: cover;
 }
+
+/* ── 客服功能 ── */
+.nav-support {
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-600);
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-pill);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-support:hover {
+  background: var(--sand-50);
+  color: var(--primary);
+}
+
+.mobile-only-support {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .navbar-user .nav-support {
+    padding: 0.7rem 0.85rem !important;
+    justify-content: flex-start;
+    margin-left: 0 !important;
+    width: 100%;
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+  }
+  .mobile-only-support {
+    display: block;
+  }
+}

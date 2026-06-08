@@ -43,6 +43,7 @@
     <button class="tab-btn active" id="tab-posts" onclick="setTab('posts')">📋 所有貼文</button>
     <button class="tab-btn" id="tab-claims" onclick="setTab('claims')">🙋 認領申請</button>
     <button class="tab-btn" id="tab-users" onclick="setTab('users')">👥 用戶列表</button>
+    <button class="tab-btn" id="tab-supports" onclick="setTab('supports')">💬 客服諮詢</button>
   </div>
 
   <div id="tab-content"></div>
@@ -59,6 +60,7 @@
   let allPosts = [];
   let allClaims = [];
   let allUsers = [];
+  let allSupportConvs = [];
 
   function setTab(tab) {
     currentTab = tab;
@@ -154,6 +156,7 @@
 
     else if (currentTab === 'users') {
       const users = allUsers;
+      const session = getSession();
       if (users.length === 0) { container.innerHTML = '<p class="text-muted mt-2">尚無用戶</p>'; return; }
       container.innerHTML = `
         <table style="width:100%; border-collapse:collapse; font-size:0.875rem; background:#fff; border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow);">
@@ -163,22 +166,55 @@
               <th style="text-align:left; padding:0.75rem; font-weight:500;">學號</th>
               <th style="text-align:left; padding:0.75rem; font-weight:500;">發文數</th>
               <th style="text-align:left; padding:0.75rem; font-weight:500;">註冊時間</th>
+              <th style="padding:0.75rem; font-weight:500; text-align:center;">操作</th>
             </tr>
           </thead>
           <tbody>
             ${users.map(u => {
               const postCount = allPosts.filter(p => p.authorId === u.id).length;
+              const isSelf = session && u.id === session.id;
               return `
                 <tr style="border-bottom:1px solid var(--sand-100);">
                   <td style="padding:0.75rem 1rem; font-weight:500;">${u.name}</td>
                   <td style="padding:0.75rem; color:var(--ink-600); font-family:var(--font-mono); font-size:0.8rem;">${u.id}</td>
                   <td style="padding:0.75rem;">${postCount}</td>
                   <td style="padding:0.75rem; color:var(--ink-500);">${timeAgo(u.createdAt)}</td>
+                  <td style="padding:0.75rem; text-align:center;">
+                    ${isSelf ? '<span class="text-muted text-sm">本人</span>' : `<button class="btn btn-danger btn-sm" onclick="removeUser('${u.id}')">刪除</button>`}
+                  </td>
                 </tr>
               `;
             }).join('')}
           </tbody>
         </table>
+      `;
+    }
+
+    else if (currentTab === 'supports') {
+      const convs = allSupportConvs;
+      if (convs.length === 0) { container.innerHTML = '<p class="text-muted mt-2">尚無客服諮詢訊息</p>'; return; }
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.5rem;">
+          ${convs.map(c => {
+            const partner = c.participants.find(p => p.id !== 'admin') || { name: '未知', id: '' };
+            const lastText = c.lastMessage ? c.lastMessage.text : '（暫無訊息）';
+            const lastTimeStr = c.lastMessage ? timeAgo(c.lastMessage.time) : timeAgo(c.lastTime);
+            return `
+              <div class="conv-item" onclick="openGlobalChat('${partner.id}', '${partner.name}', 'support', '與 ${partner.name} 的客服對話')">
+                <div class="conv-dot">👤</div>
+                <div style="flex:1;">
+                  <div class="d-flex align-center justify-between" style="margin-bottom:0.2rem;">
+                    <strong>${partner.name} <span class="text-muted text-sm">（學號: ${partner.id}）</span></strong>
+                    <span class="text-muted text-sm">${lastTimeStr}</span>
+                  </div>
+                  <div class="text-muted text-sm" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px;">
+                    ${lastText}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       `;
     }
   }
@@ -235,6 +271,18 @@
     }
   }
 
+  async function removeUser(studentId) {
+    if (confirm(`確定要刪除用戶「${studentId}」嗎？這將會刪除其個人帳號資料。`)) {
+      const ok = await deleteUser(studentId);
+      if (ok) {
+        alert('刪除成功');
+        await initAdmin();
+      } else {
+        alert('刪除失敗，請再試一次');
+      }
+    }
+  }
+
   async function initAdmin() {
     if (!requireAdmin()) return;
     
@@ -244,6 +292,13 @@
       allPosts = await getPosts();
       allClaims = await getClaims();
       allUsers = await getUsers();
+      
+      allSupportConvs = (await getMyConversations('admin')).filter(c => c.postId === 'support');
+      for (let c of allSupportConvs) {
+        const partner = c.participants.find(p => p.id !== 'admin') || { name: '未知', id: '' };
+        const msgs = await getMessages('support', 'admin', partner.id);
+        c.lastMessage = msgs[msgs.length - 1] || null;
+      }
       
       updateStats();
       renderTab();
