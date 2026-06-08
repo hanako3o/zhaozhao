@@ -498,6 +498,8 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
 .chat-bubble {
   max-width: 78%; padding: 0.65rem 1rem;
   border-radius: 18px; font-size: 0.9rem; line-height: 1.5;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .chat-bubble.me { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 5px; }
