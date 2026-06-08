@@ -14,17 +14,17 @@
 <div class="container" style="max-width:430px; padding-top:3rem; padding-bottom:3rem;">
   <div class="card fade-up">
     <div class="card-body">
-      <div class="auth-icon">🎒</div>
       <h2 style="font-family:var(--font-display); font-size:1.5rem; font-weight:800; text-align:center; margin-bottom:0.25rem;">建立帳號</h2>
       <p class="text-muted text-sm text-center mb-3">使用學號作為帳號，僅供在校同學使用</p>
 
       <div id="alert-box" class="hidden"></div>
 
       <!-- 頭像上傳 -->
-      <div style="display:flex; flex-direction:column; align-items:center; gap:0.5rem; margin-bottom:1.25rem;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:0.6rem; margin-bottom:1.5rem;">
         <div id="reg-avatar" onclick="document.getElementById('reg-avatar-file').click()"
-          style="width:72px;height:72px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:800;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 3px 10px rgba(23,81,144,0.3);">
-          <span id="reg-avatar-label">🎒</span>
+          style="width:100px;height:100px;border-radius:50%;background:var(--sand-100);color:var(--ink-400);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:2.5px dashed var(--sand-200);gap:0.2rem;">
+          <span id="reg-avatar-icon" style="font-size:2rem;">🖼️</span>
+          <span id="reg-avatar-hint" style="font-size:0.6rem;color:var(--ink-400);">上傳照片</span>
         </div>
         <input type="file" id="reg-avatar-file" accept="image/*" class="hidden" onchange="handleRegAvatar(event)">
         <span style="font-size:0.75rem;color:var(--ink-500);">點擊上傳大頭貼（選填）</span>
@@ -87,7 +87,9 @@
       el.style.backgroundImage = `url('${compressed}')`;
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
-      document.getElementById('reg-avatar-label').textContent = '';
+      el.style.border = 'none';
+      document.getElementById('reg-avatar-icon').style.display = 'none';
+      document.getElementById('reg-avatar-hint').style.display = 'none';
     };
     reader.readAsDataURL(file);
     event.target.value = '';
