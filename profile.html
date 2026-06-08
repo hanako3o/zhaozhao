@@ -16,13 +16,13 @@
   <!-- 個人資訊 -->
   <div class="profile-hero fade-up" id="profile-hero"></div>
 
-  <!-- 客服按鈕 (僅手機端顯示) -->
-  <div class="mobile-only-support" style="margin-top:-0.5rem; margin-bottom: 1.5rem;">
+  <!-- 客服按鈕 (僅手機端、僅自己的頁面顯示) -->
+  <div class="mobile-only-support" id="mobile-support-btn" style="margin-top:-0.5rem; margin-bottom: 1.5rem; display:none;">
     <button class="btn btn-secondary btn-block" onclick="openGlobalChat('admin', '管理員', 'support', '聯絡線上客服')">💬 聯絡線上客服</button>
   </div>
 
-  <!-- Tabs -->
-  <div class="tabs">
+  <!-- Tabs（自己的頁面才顯示多 tab） -->
+  <div class="tabs" id="profile-tabs" style="display:none;">
     <button class="tab-btn active" id="tab-posts" onclick="setTab('posts')">📦 我的發佈</button>
     <button class="tab-btn" id="tab-claims" onclick="setTab('claims')">🙋 認領紀錄</button>
     <button class="tab-btn" id="tab-chats" onclick="setTab('chats')">💬 我的私訊</button>
@@ -32,38 +32,95 @@
 
 </div>
 
+<!-- 編輯個人資料 Modal -->
+<div class="modal-overlay hidden" id="edit-profile-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3>✏️ 編輯個人資料</h3>
+      <button class="modal-close" onclick="closeModal('edit-profile-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-alert" style="display:none;" class="alert alert-danger"></div>
+
+      <!-- 頭像上傳 -->
+      <div style="display:flex; flex-direction:column; align-items:center; gap:0.75rem; margin-bottom:1.25rem;">
+        <div id="edit-avatar-preview" class="profile-avatar" style="cursor:pointer; position:relative; width:80px; height:80px; font-size:2rem;" onclick="document.getElementById('avatar-file').click()">
+          <span id="edit-avatar-label"></span>
+          <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.15s;" id="edit-avatar-overlay">📷</div>
+        </div>
+        <input type="file" id="avatar-file" accept="image/*" class="hidden" onchange="handleAvatarUpload(event)">
+        <span style="font-size:0.78rem;color:var(--ink-500);">點擊頭像更換圖片</span>
+      </div>
+
+      <!-- 改名 -->
+      <div class="form-group">
+        <label>顯示名稱 <span id="name-change-hint" style="font-size:0.75rem; color:var(--ink-500);"></span></label>
+        <input type="text" id="edit-name-input" class="form-control" maxlength="20" placeholder="輸入新名稱">
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="saveProfile()">儲存</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 <script>
   renderNavbar('');
-  if (!requireLogin()) { /* 導向登入 */ }
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const viewUid = urlParams.get('uid');
   const session = getSession();
+  const isOwnProfile = !viewUid || (session && viewUid === session.id);
+
   let currentTab = 'posts';
   let myPosts = [];
   let myClaims = [];
   let myConvs = [];
   let allPosts = [];
   let convLastMsgs = {};
+  let profileData = null; // fetched from DB
+  let pendingAvatar = null; // base64 string pending save
 
-  // 個人資訊區
-  function renderHero() {
-    document.getElementById('profile-hero').innerHTML = `
-      <div class="profile-avatar">${session.name.charAt(0).toUpperCase()}</div>
-      <div style="flex:1;">
-        <div style="font-family:var(--font-display); font-size:1.4rem; font-weight:800; color:var(--ink-900);">
-          ${session.name} ${session.isAdmin ? '<span class="badge badge-pending" style="vertical-align:middle;">管理員</span>' : ''}
-        </div>
-        <div class="text-muted text-sm" style="font-family:var(--font-mono);">${session.id}</div>
-        <div style="display:flex; gap:1.25rem; margin-top:0.6rem; font-size:0.85rem;">
-          <span><strong style="color:var(--primary);">${myPosts.length}</strong> 則發佈</span>
+  // ── 頭像放大 ──
+  function onAvatarClick() {
+    const src = profileData?.avatarUrl || null;
+    const init = (profileData?.name || session?.name || '?').charAt(0).toUpperCase();
+    showAvatarModal(src, init);
+  }
+
+  // ── Hero 渲染 ──
+  function renderHero(profile, isOwn) {
+    const name = profile.name;
+    const initial = name.charAt(0).toUpperCase();
+    const avatarHtml = profile.avatarUrl
+      ? `<img src="${profile.avatarUrl}" alt="${initial}" class="profile-avatar" style="object-fit:cover;cursor:pointer;" onclick="onAvatarClick()">`
+      : `<div class="profile-avatar" style="cursor:pointer;" onclick="onAvatarClick()">${initial}</div>`;
+
+    let stats = `
+      <div style="display:flex; gap:1.25rem; margin-top:0.6rem; font-size:0.85rem;">
+        <span><strong style="color:var(--primary);">${myPosts.length}</strong> 則發佈</span>
+        ${isOwn ? `
           <span><strong style="color:var(--green);">${myClaims.length}</strong> 筆認領</span>
           <span><strong style="color:var(--amber-dark);">${myConvs.length}</strong> 個對話</span>
+        ` : ''}
+      </div>`;
+
+    document.getElementById('profile-hero').innerHTML = `
+      ${avatarHtml}
+      <div style="flex:1;">
+        <div style="font-family:var(--font-display); font-size:1.4rem; font-weight:800; color:var(--ink-900); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+          ${name}
+          ${profile.id === 'admin' ? '<span class="badge badge-pending">管理員</span>' : ''}
+          ${isOwn && !profile.isAdmin ? `<button class="btn btn-sm" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="openEditModal()">✏️ 編輯</button>` : ''}
         </div>
+        <div class="text-muted text-sm" style="font-family:var(--font-mono);">${profile.id}</div>
+        ${stats}
       </div>
     `;
   }
 
+  // ── Tab ──
   function setTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -76,11 +133,9 @@
       <div class="item-card" onclick="location.href='detail.html?id=${p.id}'">
         <div class="item-card-img" style="position:relative;">
           ${p.imageUrl && p.imageUrl.length > 0
-            ? `<img src="${p.imageUrl[0]}" alt="${p.title}" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
+            ? `<img src="${p.imageUrl[0]}" alt="${p.title}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
             : `<span style="font-size:3rem;">${categoryIcon(p.category)}</span>`}
-          ${p.imageUrl && p.imageUrl.length > 1
-            ? `<div class="image-badge">📷 ${p.imageUrl.length}</div>`
-            : ''}
+          ${p.imageUrl && p.imageUrl.length > 1 ? `<div class="image-badge">📷 ${p.imageUrl.length}</div>` : ''}
         </div>
         <div class="item-card-body">
           <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.55rem;">
@@ -99,13 +154,13 @@
     const container = document.getElementById('tab-content');
 
     if (currentTab === 'posts') {
-      const posts = [...myPosts].sort((a,b) => b.createdAt - a.createdAt);
+      const posts = [...myPosts].sort((a, b) => b.createdAt - a.createdAt);
       if (posts.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-icon">📦</div>
-            <p>你還沒有發佈任何貼文</p>
-            <a href="add.html" class="btn btn-primary mt-2">+ 立即發佈</a>
+            <p>${isOwnProfile ? '你還沒有發佈任何貼文' : '此用戶尚未發佈任何貼文'}</p>
+            ${isOwnProfile ? '<a href="add.html" class="btn btn-primary mt-2">+ 立即發佈</a>' : ''}
           </div>`;
         return;
       }
@@ -113,7 +168,7 @@
     }
 
     else if (currentTab === 'claims') {
-      const claims = [...myClaims].sort((a,b) => b.createdAt - a.createdAt);
+      const claims = [...myClaims].sort((a, b) => b.createdAt - a.createdAt);
       if (claims.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
@@ -186,34 +241,176 @@
     }
   }
 
-  async function initProfile() {
-    if (!requireLogin()) return;
+  // ── 編輯 Modal ──
+  function openEditModal() {
+    if (!profileData) return;
+    pendingAvatar = null;
 
-    document.getElementById('profile-hero').innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--ink-500);">載入中...</div>';
-    document.getElementById('tab-content').innerHTML = '<div style="padding: 3rem; text-align: center; color: var(--ink-500);">載入中...</div>';
+    // 顯示目前頭像
+    const preview = document.getElementById('edit-avatar-preview');
+    const label = document.getElementById('edit-avatar-label');
+    if (profileData.avatarUrl) {
+      preview.style.backgroundImage = `url('${profileData.avatarUrl}')`;
+      preview.style.backgroundSize = 'cover';
+      preview.style.backgroundPosition = 'center';
+      label.textContent = '';
+    } else {
+      preview.style.backgroundImage = '';
+      label.textContent = profileData.name.charAt(0).toUpperCase();
+    }
+
+    // hover overlay
+    preview.onmouseenter = () => document.getElementById('edit-avatar-overlay').style.opacity = '1';
+    preview.onmouseleave = () => document.getElementById('edit-avatar-overlay').style.opacity = '0';
+
+    // 改名剩餘次數提示
+    const log = profileData.nameChangeLog || [];
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentChanges = log.filter(ts => ts > sevenDaysAgo);
+    const remaining = 2 - recentChanges.length;
+    document.getElementById('name-change-hint').textContent = `（7天內剩餘可改次數：${remaining}）`;
+    document.getElementById('edit-name-input').value = profileData.name;
+    document.getElementById('edit-name-input').disabled = remaining <= 0;
+
+    document.getElementById('edit-alert').style.display = 'none';
+    openModal('edit-profile-modal');
+  }
+
+  async function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const compressed = await compressProfileAvatar(e.target.result);
+      pendingAvatar = compressed;
+      // 更新預覽
+      const preview = document.getElementById('edit-avatar-preview');
+      preview.style.backgroundImage = `url('${compressed}')`;
+      preview.style.backgroundSize = 'cover';
+      preview.style.backgroundPosition = 'center';
+      document.getElementById('edit-avatar-label').textContent = '';
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  function compressProfileAvatar(dataUrl) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 400;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        // crop center square
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2;
+        const sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  async function saveProfile() {
+    const alertEl = document.getElementById('edit-alert');
+    alertEl.style.display = 'none';
+
+    const newName = document.getElementById('edit-name-input').value.trim();
+    if (!newName) { alertEl.textContent = '名稱不能為空'; alertEl.style.display = 'block'; return; }
+
+    const log = profileData.nameChangeLog || [];
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentChanges = log.filter(ts => ts > sevenDaysAgo);
+    const nameChanged = newName !== profileData.name;
+
+    if (nameChanged && recentChanges.length >= 2) {
+      alertEl.textContent = '7天內已改名2次，無法再次修改';
+      alertEl.style.display = 'block';
+      return;
+    }
+
+    const updates = {};
+    if (pendingAvatar !== null) updates.avatar_url = pendingAvatar;
+    if (nameChanged) {
+      updates.name = newName;
+      const newLog = [...log, Date.now()];
+      updates.name_change_log = JSON.stringify(newLog);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      closeModal('edit-profile-modal');
+      return;
+    }
+
+    const ok = await updateProfile(session.id, updates);
+    if (!ok) { alertEl.textContent = '儲存失敗，請稍後再試'; alertEl.style.display = 'block'; return; }
+
+    // 同步更新快取
+    if (pendingAvatar !== null) {
+      localStorage.setItem(`zhaozhao-avatar-${session.id}`, pendingAvatar);
+      profileData.avatarUrl = pendingAvatar;
+    }
+    if (nameChanged) {
+      profileData.name = newName;
+      profileData.nameChangeLog = [...log, Date.now()];
+    }
+
+    closeModal('edit-profile-modal');
+    renderHero(profileData, true);
+  }
+
+  // ── 初始化 ──
+  async function initProfile() {
+    if (isOwnProfile) {
+      if (!requireLogin()) return;
+      document.getElementById('mobile-support-btn').style.display = 'block';
+      document.getElementById('profile-tabs').style.display = 'flex';
+    } else if (!viewUid) {
+      window.location.href = 'index.html';
+      return;
+    }
+
+    document.getElementById('profile-hero').innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink-500);">載入中...</div>';
+    document.getElementById('tab-content').innerHTML = '<div style="padding:3rem;text-align:center;color:var(--ink-500);">載入中...</div>';
 
     try {
-      allPosts = await getPosts();
-      myPosts = allPosts.filter(p => p.authorId === session.id);
+      const targetId = isOwnProfile ? session.id : viewUid;
+      profileData = await getProfile(targetId);
 
-      const claims = await getClaims();
-      myClaims = claims.filter(c => c.claimantId === session.id);
-
-      myConvs = await getMyConversations(session.id);
-
-      // Fetch last messages
-      for (const c of myConvs) {
-        const partner = c.participants.find(p => p.id !== session.id) || { name: '未知', id: '' };
-        const msgs = await getMessages(c.postId, session.id, partner.id);
-        const last = msgs[msgs.length - 1];
-        convLastMsgs[c.key] = last ? `${last.senderId === session.id ? '你：' : ''}${last.text}` : '尚無訊息';
+      if (!profileData) {
+        document.getElementById('profile-hero').innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink-500);">找不到此用戶</div>';
+        document.getElementById('tab-content').innerHTML = '';
+        return;
       }
 
-      renderHero();
-      renderTab();
+      allPosts = await getPosts();
+      myPosts = allPosts.filter(p => p.authorId === targetId);
+
+      if (isOwnProfile) {
+        const claims = await getClaims();
+        myClaims = claims.filter(c => c.claimantId === session.id);
+        myConvs = await getMyConversations(session.id);
+        for (const c of myConvs) {
+          const partner = c.participants.find(p => p.id !== session.id) || { name: '未知', id: '' };
+          const msgs = await getMessages(c.postId, session.id, partner.id);
+          const last = msgs[msgs.length - 1];
+          convLastMsgs[c.key] = last ? `${last.senderId === session.id ? '你：' : ''}${last.text}` : '尚無訊息';
+        }
+      }
+
+      renderHero(profileData, isOwnProfile);
+
+      if (!isOwnProfile) {
+        // 公開檢視：只顯示貼文，不顯示 tab bar
+        renderTab();
+      } else {
+        renderTab();
+      }
     } catch (err) {
-      console.error("Error initializing profile:", err);
-      document.getElementById('tab-content').innerHTML = '<div style="padding: 3rem; text-align: center; color: var(--red);">載入失敗，請重新整理頁面。</div>';
+      console.error(err);
+      document.getElementById('tab-content').innerHTML = '<div style="padding:3rem;text-align:center;color:var(--red);">載入失敗，請重新整理頁面。</div>';
     }
   }
 

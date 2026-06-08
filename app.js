@@ -86,10 +86,35 @@ function getSession() {
     const studentId = meta?.student_id || data.user.email.split('@')[0];
     const name = meta?.name || '使用者';
     const isAdmin = studentId === ADMIN_ID;
-    return { id: studentId, name: name, isAdmin: isAdmin, uuid: data.user.id };
-  } catch ( hisError) {
+    const avatarUrl = localStorage.getItem(`zhaozhao-avatar-${studentId}`) || null;
+    return { id: studentId, name: name, isAdmin: isAdmin, uuid: data.user.id, avatarUrl };
+  } catch (e) {
     return null;
   }
+}
+
+async function getProfile(studentId) {
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('student_id', studentId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: data.student_id,
+    name: data.name,
+    avatarUrl: data.avatar_url || null,
+    nameChangeLog: data.name_change_log ? JSON.parse(data.name_change_log) : [],
+    createdAt: data.created_at,
+  };
+}
+
+async function updateProfile(studentId, updates) {
+  const { error } = await supabaseClient
+    .from('profiles')
+    .update(updates)
+    .eq('student_id', studentId);
+  return !error;
 }
 
 function isLoggedIn() { return !!getSession(); }
@@ -523,7 +548,10 @@ function renderNavbar(activePage) {
         ${session.isAdmin ? '<a href="admin.html" style="color:var(--amber-dark);font-weight:700">後台</a>' : ''}
         <a href="add.html" class="btn btn-primary btn-sm">+ 新增</a>
         <a href="profile.html" title="個人中心" class="nav-profile" style="display:flex;align-items:center;gap:0.5rem;padding:0;">
-          <div class="avatar">${initial}</div>
+          ${session.avatarUrl
+            ? `<img src="${session.avatarUrl}" alt="${initial}" class="avatar" style="object-fit:cover;cursor:pointer;" onclick="event.preventDefault();showAvatarModal('${session.avatarUrl}','${initial}')">`
+            : `<div class="avatar" style="cursor:pointer;" onclick="event.preventDefault();showAvatarModal(null,'${initial}')">${initial}</div>`
+          }
           <span class="nav-profile-text">個人中心</span>
         </a>
         ${session.isAdmin
@@ -542,7 +570,10 @@ function renderNavbar(activePage) {
 
   const mobileAvatar = session ? `
     <a href="profile.html" class="mobile-avatar" title="個人中心" style="margin-right: 0.5rem;">
-      <div class="avatar" style="width:32px;height:32px;font-size:0.85rem;">${session.name.charAt(0).toUpperCase()}</div>
+      ${session.avatarUrl
+        ? `<img src="${session.avatarUrl}" alt="${session.name.charAt(0).toUpperCase()}" class="avatar" style="width:32px;height:32px;object-fit:cover;">`
+        : `<div class="avatar" style="width:32px;height:32px;font-size:0.85rem;">${session.name.charAt(0).toUpperCase()}</div>`
+      }
     </a>
   ` : '';
 
@@ -581,6 +612,22 @@ async function handleLogout() {
   if (!confirm('確定要登出嗎？')) return;
   await logoutUser();
   window.location.href = 'index.html';
+}
+
+// ── Avatar Modal ──
+function showAvatarModal(imgSrc, initial) {
+  let modal = document.getElementById('avatar-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'avatar-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+    modal.onclick = () => modal.style.display = 'none';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = imgSrc
+    ? `<img src="${imgSrc}" style="max-width:80vw;max-height:80vh;border-radius:50%;object-fit:cover;width:280px;height:280px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">`
+    : `<div style="width:200px;height:200px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:5rem;font-weight:800;font-family:var(--font-display);box-shadow:0 8px 32px rgba(0,0,0,0.4);">${initial}</div>`;
+  modal.style.display = 'flex';
 }
 
 // ── Floating Chat Widget ──

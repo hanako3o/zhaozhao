@@ -155,7 +155,10 @@
             </div>
             <div style="font-size:0.875rem;">
               <span style="color:var(--ink-500);">👤 發布者</span><br>
-              <strong>${post.authorName}</strong>
+              ${post.authorId !== 'admin'
+                ? `<a href="profile.html?uid=${encodeURIComponent(post.authorId)}" style="font-weight:700;color:var(--ink-900);text-decoration:none;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--ink-900)'">${post.authorName}</a>`
+                : `<strong>${post.authorName}</strong>`
+              }
             </div>
             <div style="font-size:0.875rem;">
               <span style="color:var(--ink-500);">🕐 發布時間</span><br>

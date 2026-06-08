@@ -144,7 +144,7 @@
           <div class="item-card-title">${p.title}</div>
           <div class="item-card-meta">
             <span>📍 ${p.location}</span>
-            <span>👤 ${p.authorName}</span>
+            <span>👤 ${p.authorId !== 'admin' ? `<a href="profile.html?uid=${encodeURIComponent(p.authorId)}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">${p.authorName}</a>` : p.authorName}</span>
             <span>🕐 ${timeAgo(p.createdAt)}</span>
           </div>
         </div>
