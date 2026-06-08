@@ -71,7 +71,6 @@
     const pw2 = document.getElementById('password2').value;
 
     if (!id || !name || !pw || !pw2) { showAlert('請填寫所有欄位'); return; }
-    if (id === ADMIN_ID) { showAlert('此帳號不可使用'); return; }
     if (pw.length < 6) { showAlert('密碼至少需要 6 個字元'); return; }
     if (pw !== pw2) { showAlert('兩次密碼不一致'); return; }
 
@@ -80,7 +79,7 @@
       showAlert('✅ 註冊成功！即將前往登入頁面...', 'success');
       setTimeout(() => window.location.href = 'login.html', 1500);
     } else {
-      showAlert(result.msg);
+      showAlert(translateAuthError(result.msg));
     }
   }
 

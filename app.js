@@ -527,6 +527,22 @@ function requireAdmin(redirect = 'index.html') {
   return true;
 }
 
+// ── 錯誤訊息翻譯 ──
+function translateAuthError(msg) {
+  if (!msg) return '發生未知錯誤，請稍後再試';
+  const lower = msg.toLowerCase();
+  if (lower.includes('invalid login credentials')) return '帳號或密碼錯誤，請重新輸入';
+  if (lower.includes('email not confirmed')) return '帳號尚未驗證，請聯繫管理員';
+  if (lower.includes('user already registered') || lower.includes('already been registered')) return '此帳號已被註冊，請直接登入';
+  if (lower.includes('email rate limit exceeded')) return '註冊請求過於頻繁，請稍後再試';
+  if (lower.includes('password') && lower.includes('short')) return '密碼長度不足，至少需要 6 個字元';
+  if (lower.includes('signup is disabled')) return '目前暫停註冊，請聯繫管理員';
+  if (lower.includes('network')) return '網路連線異常，請檢查網路後再試';
+  if (lower.includes('rate limit')) return '操作過於頻繁，請稍候再試';
+  if (lower.includes('weak password')) return '密碼強度不足，請使用更安全的密碼';
+  return msg; // 無法翻譯的直接回傳原文
+}
+
 // ── 示範資料 (已被資料庫 Seed 替代) ──
 function seedDemoData() {
   // Supabase 資料庫已包含種子資料，免去前端種子邏輯
