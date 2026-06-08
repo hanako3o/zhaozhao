@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>個人中心 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="padding-top:1.5rem; padding-bottom:3rem;">
+
+  <!-- 個人資訊 -->
+  <div class="profile-hero fade-up" id="profile-hero"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" style="max-width:560px;">
+    <button class="tab-btn active" id="tab-posts" onclick="setTab('posts')">📦 我的發佈</button>
+    <button class="tab-btn" id="tab-claims" onclick="setTab('claims')">🙋 認領紀錄</button>
+    <button class="tab-btn" id="tab-chats" onclick="setTab('chats')">💬 我的私訊</button>
+  </div>
+
+  <div id="tab-content"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  renderNavbar('');
+  if (!requireLogin()) { /* 導向登入 */ }
+
+  const session = getSession();
+  let currentTab = 'posts';
+  let myPosts = [];
+  let myClaims = [];
+  let myConvs = [];
+  let allPosts = [];
+  let convLastMsgs = {};
+
+  // 個人資訊區
+  function renderHero() {
+    document.getElementById('profile-hero').innerHTML = `
+      <div class="profile-avatar">${session.name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1;">
+        <div style="font-family:var(--font-display); font-size:1.4rem; font-weight:800; color:var(--ink-900);">
+          ${session.name} ${session.isAdmin ? '<span class="badge badge-pending" style="vertical-align:middle;">管理員</span>' : ''}
+        </div>
+        <div class="text-muted text-sm" style="font-family:var(--font-mono);">${session.id}</div>
+        <div style="display:flex; gap:1.25rem; margin-top:0.6rem; font-size:0.85rem;">
+          <span><strong style="color:var(--primary);">${myPosts.length}</strong> 則發佈</span>
+          <span><strong style="color:var(--green);">${myClaims.length}</strong> 筆認領</span>
+          <span><strong style="color:var(--amber-dark);">${myConvs.length}</strong> 個對話</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    renderTab();
+  }
+
+  function postCard(p) {
+    return `
+      <div class="item-card" onclick="location.href='detail.html?id=${p.id}'">
+        <div class="item-card-img">
+          ${p.imageUrl
+            ? `<img src="${p.imageUrl}" alt="${p.title}" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
+            : `<span style="font-size:3rem;">${categoryIcon(p.category)}</span>`}
+        </div>
+        <div class="item-card-body">
+          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.55rem;">
+            ${typeBadge(p.type)} ${statusBadge(p.status)}
+          </div>
+          <div class="item-card-title">${p.title}</div>
+          <div class="item-card-meta">
+            <span>📍 ${p.location}</span>
+            <span>🕐 ${timeAgo(p.createdAt)}</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderTab() {
+    const container = document.getElementById('tab-content');
+
+    if (currentTab === 'posts') {
+      const posts = [...myPosts].sort((a,b) => b.createdAt - a.createdAt);
+      if (posts.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <p>你還沒有發佈任何貼文</p>
+            <a href="add.html" class="btn btn-primary mt-2">+ 立即發佈</a>
+          </div>`;
+        return;
+      }
+      container.innerHTML = `<div class="grid-2">${posts.map(postCard).join('')}</div>`;
+    }
+
+    else if (currentTab === 'claims') {
+      const claims = [...myClaims].sort((a,b) => b.createdAt - a.createdAt);
+      if (claims.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🙋</div>
+            <p>你還沒有任何認領或回報紀錄</p>
+            <a href="list.html" class="btn btn-primary mt-2">瀏覽失物列表</a>
+          </div>`;
+        return;
+      }
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          ${claims.map(c => {
+            const post = allPosts.find(p => p.id === c.postId);
+            const statusMap = {
+              pending: '<span class="badge badge-reviewing">審核中</span>',
+              approved: '<span class="badge badge-found">已通過</span>',
+              rejected: '<span class="badge badge-closed">已拒絕</span>',
+            };
+            return `
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex align-center justify-between flex-wrap gap-2 mb-1">
+                    <a href="detail.html?id=${c.postId}" style="font-weight:700; font-size:1rem;">
+                      ${post ? post.title : '（貼文已刪除）'}
+                    </a>
+                    ${statusMap[c.status] || ''}
+                  </div>
+                  ${post ? `<div style="margin-bottom:0.6rem;">${typeBadge(post.type)}</div>` : ''}
+                  <p class="text-sm" style="color:var(--ink-600);"><strong>我填寫的說明：</strong>${c.detail}</p>
+                  <p class="text-sm text-muted mt-1">🕐 ${timeAgo(c.createdAt)} 提交</p>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    else if (currentTab === 'chats') {
+      if (myConvs.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">💬</div>
+            <p>目前沒有任何對話</p>
+            <p class="text-sm">在貼文詳細頁可以私訊發布者</p>
+          </div>`;
+        return;
+      }
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+          ${myConvs.map(c => {
+            const partner = c.participants.find(p => p.id !== session.id) || { name: '未知', id: '' };
+            const preview = convLastMsgs[c.key] || '尚無訊息';
+            return `
+              <div class="conv-item" onclick="location.href='detail.html?id=${c.postId}&chat=${partner.id}'">
+                <div class="conv-dot">💬</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; justify-content:space-between; gap:0.5rem;">
+                    <strong style="font-size:0.95rem;">${partner.name}</strong>
+                    <span class="text-muted text-sm" style="flex-shrink:0;">${timeAgo(c.lastTime)}</span>
+                  </div>
+                  <div class="text-sm text-muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    📌 ${c.postTitle}
+                  </div>
+                  <div class="text-sm" style="color:var(--ink-600); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${preview}
+                  </div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+  }
+
+  async function initProfile() {
+    if (!requireLogin()) return;
+
+    document.getElementById('profile-hero').innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--ink-500);">載入中...</div>';
+    document.getElementById('tab-content').innerHTML = '<div style="padding: 3rem; text-align: center; color: var(--ink-500);">載入中...</div>';
+
+    try {
+      allPosts = await getPosts();
+      myPosts = allPosts.filter(p => p.authorId === session.id);
+
+      const claims = await getClaims();
+      myClaims = claims.filter(c => c.claimantId === session.id);
+
+      myConvs = await getMyConversations(session.id);
+
+      // Fetch last messages
+      for (const c of myConvs) {
+        const partner = c.participants.find(p => p.id !== session.id) || { name: '未知', id: '' };
+        const msgs = await getMessages(c.postId, session.id, partner.id);
+        const last = msgs[msgs.length - 1];
+        convLastMsgs[c.key] = last ? `${last.senderId === session.id ? '你：' : ''}${last.text}` : '尚無訊息';
+      }
+
+      renderHero();
+      renderTab();
+    } catch (err) {
+      console.error("Error initializing profile:", err);
+      document.getElementById('tab-content').innerHTML = '<div style="padding: 3rem; text-align: center; color: var(--red);">載入失敗，請重新整理頁面。</div>';
+    }
+  }
+
+  initProfile();
+</script>
+</body>
+</html>

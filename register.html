@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>註冊 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="max-width:430px; padding-top:3rem; padding-bottom:3rem;">
+  <div class="card fade-up">
+    <div class="card-body">
+      <div class="auth-icon">🎒</div>
+      <h2 style="font-family:var(--font-display); font-size:1.5rem; font-weight:800; text-align:center; margin-bottom:0.25rem;">建立帳號</h2>
+      <p class="text-muted text-sm text-center mb-3">使用學號作為帳號，僅供在校同學使用</p>
+
+      <div id="alert-box" class="hidden"></div>
+
+      <div class="form-group">
+        <label for="student-id">學號</label>
+        <input type="text" id="student-id" placeholder="例：B11234001" autocomplete="username">
+        <div class="form-hint">學號將作為您的登入帳號</div>
+      </div>
+
+      <div class="form-group">
+        <label for="name">姓名</label>
+        <input type="text" id="name" placeholder="請輸入真實姓名">
+      </div>
+
+      <div class="form-group">
+        <label for="password">密碼</label>
+        <input type="password" id="password" placeholder="至少 6 個字元" autocomplete="new-password">
+      </div>
+
+      <div class="form-group">
+        <label for="password2">確認密碼</label>
+        <input type="password" id="password2" placeholder="再次輸入密碼" autocomplete="new-password">
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="handleRegister()">建立帳號</button>
+
+      <p class="text-center text-sm mt-2" style="color:var(--ink-500);">
+        已有帳號？<a href="login.html">前往登入</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  
+  renderNavbar('');
+
+  if (isLoggedIn()) window.location.href = 'index.html';
+
+  function showAlert(msg, type = 'danger') {
+    const box = document.getElementById('alert-box');
+    box.className = `alert alert-${type}`;
+    box.textContent = msg;
+  }
+
+  async function handleRegister() {
+    const id = document.getElementById('student-id').value.trim();
+    const name = document.getElementById('name').value.trim();
+    const pw = document.getElementById('password').value;
+    const pw2 = document.getElementById('password2').value;
+
+    if (!id || !name || !pw || !pw2) { showAlert('請填寫所有欄位'); return; }
+    if (id === ADMIN_ID) { showAlert('此帳號不可使用'); return; }
+    if (pw.length < 6) { showAlert('密碼至少需要 6 個字元'); return; }
+    if (pw !== pw2) { showAlert('兩次密碼不一致'); return; }
+
+    const result = await registerUser(id, pw, name);
+    if (result.ok) {
+      showAlert('✅ 註冊成功！即將前往登入頁面...', 'success');
+      setTimeout(() => window.location.href = 'login.html', 1500);
+    } else {
+      showAlert(result.msg);
+    }
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') handleRegister(); });
+</script>
+</body>
+</html>

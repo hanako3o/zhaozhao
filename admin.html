@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理員後台 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="padding-top:1.5rem; padding-bottom:3rem;">
+
+  <div class="page-header">
+    <h2>⚙️ 管理員後台</h2>
+    <p>管理所有貼文與認領申請</p>
+  </div>
+
+  <!-- 統計 -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; margin-bottom:2rem;">
+    <div class="card" style="text-align:center; padding:1.1rem;">
+      <div style="font-size:1.75rem; font-weight:700; color:var(--ink-800);" id="s-total">0</div>
+      <div style="font-size:0.8rem; color:var(--ink-500);">全部貼文</div>
+    </div>
+    <div class="card" style="text-align:center; padding:1.1rem;">
+      <div style="font-size:1.75rem; font-weight:700; color:var(--amber);" id="s-reviewing">0</div>
+      <div style="font-size:0.8rem; color:var(--ink-500);">待審核申請</div>
+    </div>
+    <div class="card" style="text-align:center; padding:1.1rem;">
+      <div style="font-size:1.75rem; font-weight:700; color:var(--green);" id="s-closed">0</div>
+      <div style="font-size:0.8rem; color:var(--ink-500);">已結案</div>
+    </div>
+    <div class="card" style="text-align:center; padding:1.1rem;">
+      <div style="font-size:1.75rem; font-weight:700; color:var(--primary);" id="s-users">0</div>
+      <div style="font-size:0.8rem; color:var(--ink-500);">註冊用戶</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-posts" onclick="setTab('posts')">📋 所有貼文</button>
+    <button class="tab-btn" id="tab-claims" onclick="setTab('claims')">🙋 認領申請</button>
+    <button class="tab-btn" id="tab-users" onclick="setTab('users')">👥 用戶列表</button>
+  </div>
+
+  <div id="tab-content"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  renderNavbar('');
+  if (!requireAdmin()) { alert('僅限管理員存取'); }
+
+  let currentTab = 'posts';
+  let allPosts = [];
+  let allClaims = [];
+  let allUsers = [];
+
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    renderTab();
+  }
+
+  function updateStats() {
+    document.getElementById('s-total').textContent = allPosts.length;
+    document.getElementById('s-reviewing').textContent = allClaims.filter(c => c.status === 'pending').length;
+    document.getElementById('s-closed').textContent = allPosts.filter(p => p.status === STATUS.CLOSED).length;
+    document.getElementById('s-users').textContent = allUsers.length;
+  }
+
+  function renderTab() {
+    updateStats();
+    const container = document.getElementById('tab-content');
+
+    if (currentTab === 'posts') {
+      const posts = allPosts;
+      if (posts.length === 0) { container.innerHTML = '<p class="text-muted mt-2">尚無貼文</p>'; return; }
+      container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.875rem; background:#fff; border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow);">
+          <thead>
+            <tr style="background:var(--sand-50); border-bottom:1px solid var(--sand-200);">
+              <th style="text-align:left; padding:0.75rem 1rem; font-weight:500;">標題</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">類型</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">狀態</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">發布者</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">時間</th>
+              <th style="padding:0.75rem; font-weight:500;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${posts.map(p => `
+              <tr style="border-bottom:1px solid var(--sand-100);">
+                <td style="padding:0.75rem 1rem;">
+                  <a href="detail.html?id=${p.id}" style="font-weight:500;">${p.title}</a>
+                </td>
+                <td style="padding:0.75rem;">${typeBadge(p.type)}</td>
+                <td style="padding:0.75rem;">${statusBadge(p.status)}</td>
+                <td style="padding:0.75rem; color:var(--ink-600);">${p.authorName}</td>
+                <td style="padding:0.75rem; color:var(--ink-500);">${timeAgo(p.createdAt)}</td>
+                <td style="padding:0.75rem; text-align:center;">
+                  <div style="display:flex; gap:0.4rem; justify-content:center; flex-wrap:wrap;">
+                    ${p.status === STATUS.REVIEWING ? `<button class="btn btn-success btn-sm" onclick="closePost('${p.id}')">結案</button>` : ''}
+                    ${p.status !== STATUS.CLOSED ? `<button class="btn btn-secondary btn-sm" onclick="setPostPending('${p.id}')">重設</button>` : ''}
+                    <button class="btn btn-danger btn-sm" onclick="removePost('${p.id}')">刪除</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    else if (currentTab === 'claims') {
+      const claims = allClaims;
+      if (claims.length === 0) { container.innerHTML = '<p class="text-muted mt-2">尚無認領申請</p>'; return; }
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:1rem; margin-top:0.5rem;">
+          ${claims.map(c => {
+            const post = allPosts.find(p => p.id === c.postId);
+            return `
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex align-center justify-between flex-wrap gap-2 mb-2">
+                    <div>
+                      <strong>${c.claimantName}</strong>
+                      <span class="text-muted text-sm">（${c.studentId || '未填學號'}）</span>
+                      <span style="margin-left:0.5rem;">${c.status === 'pending' ? '<span class="badge badge-reviewing">待審核</span>' : c.status === 'approved' ? '<span class="badge badge-found">已核准</span>' : '<span class="badge badge-closed">已拒絕</span>'}</span>
+                    </div>
+                    <span class="text-muted text-sm">${timeAgo(c.createdAt)}</span>
+                  </div>
+                  <p class="text-sm mb-1"><strong>申請貼文：</strong><a href="detail.html?id=${c.postId}">${post ? post.title : '（已刪除）'}</a></p>
+                  <p class="text-sm mb-1"><strong>辨識描述：</strong>${c.detail}</p>
+                  ${c.contact ? `<p class="text-sm mb-1"><strong>聯絡方式：</strong>${c.contact}</p>` : ''}
+                  ${c.status === 'pending' ? `
+                    <div style="display:flex; gap:0.5rem; margin-top:0.75rem;">
+                      <button class="btn btn-success btn-sm" onclick="approveClaim('${c.id}')">✅ 核准</button>
+                      <button class="btn btn-danger btn-sm" onclick="rejectClaim('${c.id}')">❌ 拒絕</button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    else if (currentTab === 'users') {
+      const users = allUsers;
+      if (users.length === 0) { container.innerHTML = '<p class="text-muted mt-2">尚無用戶</p>'; return; }
+      container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.875rem; background:#fff; border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow);">
+          <thead>
+            <tr style="background:var(--sand-50); border-bottom:1px solid var(--sand-200);">
+              <th style="text-align:left; padding:0.75rem 1rem; font-weight:500;">姓名</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">學號</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">發文數</th>
+              <th style="text-align:left; padding:0.75rem; font-weight:500;">註冊時間</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => {
+              const postCount = allPosts.filter(p => p.authorId === u.id).length;
+              return `
+                <tr style="border-bottom:1px solid var(--sand-100);">
+                  <td style="padding:0.75rem 1rem; font-weight:500;">${u.name}</td>
+                  <td style="padding:0.75rem; color:var(--ink-600); font-family:var(--font-mono); font-size:0.8rem;">${u.id}</td>
+                  <td style="padding:0.75rem;">${postCount}</td>
+                  <td style="padding:0.75rem; color:var(--ink-500);">${timeAgo(u.createdAt)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+  }
+
+  // ── 管理操作 ──
+  async function closePost(id) {
+    if (confirm('確定結案？')) {
+      const ok = await updatePostStatus(id, STATUS.CLOSED);
+      if (ok) {
+        await initAdmin();
+      } else {
+        alert('結案失敗');
+      }
+    }
+  }
+
+  async function setPostPending(id) {
+    if (confirm('重設為待認領？')) {
+      const ok = await updatePostStatus(id, STATUS.PENDING);
+      if (ok) {
+        await initAdmin();
+      } else {
+        alert('重設失敗');
+      }
+    }
+  }
+
+  async function removePost(id) {
+    if (confirm('確定刪除此貼文？')) {
+      await deletePost(id);
+      await initAdmin();
+    }
+  }
+
+  async function approveClaim(id) {
+    if (confirm('確定核准此認領申請並結案？')) {
+      const ok = await updateClaim(id, 'approved');
+      if (ok) {
+        await initAdmin();
+      } else {
+        alert('核准失敗');
+      }
+    }
+  }
+
+  async function rejectClaim(id) {
+    if (confirm('確定拒絕此認領申請？')) {
+      const ok = await updateClaim(id, 'rejected');
+      if (ok) {
+        await initAdmin();
+      } else {
+        alert('拒絕失敗');
+      }
+    }
+  }
+
+  async function initAdmin() {
+    if (!requireAdmin()) return;
+    
+    document.getElementById('tab-content').innerHTML = '<div style="padding:3rem; text-align:center; color:var(--ink-500);">載入中...</div>';
+    
+    try {
+      allPosts = await getPosts();
+      allClaims = await getClaims();
+      allUsers = await getUsers();
+      
+      updateStats();
+      renderTab();
+    } catch (err) {
+      console.error("Error loading admin data:", err);
+      document.getElementById('tab-content').innerHTML = '<div style="padding:3rem; text-align:center; color:var(--red);">載入資料錯誤，請重新整理。</div>';
+    }
+  }
+
+  initAdmin();
+</script>
+</body>
+</html>

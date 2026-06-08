@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新增發佈 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="max-width:600px; padding-top:2rem; padding-bottom:3rem;">
+
+  <div class="page-header">
+    <h2 id="page-title">新增發佈</h2>
+    <p>請如實填寫物品資訊，有助於快速找到失主或找回失物</p>
+  </div>
+
+  <!-- 類型選擇 -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-found" onclick="setType('found')">✋ 我撿到東西（拾獲招領）</button>
+    <button class="tab-btn" id="tab-lost" onclick="setType('lost')">😥 我掉了東西（遺失協尋）</button>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div id="alert-box" class="hidden"></div>
+
+      <div class="form-group">
+        <label for="title">標題 <span class="req">*</span></label>
+        <input type="text" id="title" placeholder="例：拾獲黑色 AirPods Pro / 遺失學生證">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+        <div class="form-group">
+          <label for="category">分類 <span class="req">*</span></label>
+          <select id="category">
+            <option value="">請選擇分類</option>
+            <option value="3C產品">3C產品</option>
+            <option value="證件">證件</option>
+            <option value="文具">文具</option>
+            <option value="水壺">水壺</option>
+            <option value="衣物">衣物</option>
+            <option value="鑰匙">鑰匙</option>
+            <option value="錢包">錢包</option>
+            <option value="書籍">書籍</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="location">地點 <span class="req">*</span></label>
+          <input type="text" id="location" placeholder="例：圖書館二樓">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="description">物品描述 <span class="req">*</span></label>
+        <textarea id="description" placeholder="請詳細描述物品外觀、特徵、顏色等，越詳細越好..." rows="4"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>物品圖片（選填）</label>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('image-file').click()">
+          <div class="upload-icon">📷</div>
+          <p>點擊上傳圖片<br><span style="font-size:0.78rem;">支援 JPG / PNG，建議小於 2MB</span></p>
+        </div>
+        <input type="file" id="image-file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+        <div id="img-preview-wrap" class="text-center"></div>
+      </div>
+
+      <div id="secret-field" class="form-group hidden">
+        <label for="secret-hint">隱藏驗證資訊（選填）</label>
+        <input type="text" id="secret-hint" placeholder="例：悠遊卡末四碼、水壺底部刮痕等">
+        <div class="form-hint">此資訊不會公開顯示，用於認領時驗證身份</div>
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="handleSubmit()">發布貼文</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  
+  renderNavbar('');
+
+  // 需要登入
+  if (!requireLogin()) {
+    alert('請先登入才能發布貼文');
+  }
+
+  let currentType = 'found';
+  let uploadedImage = '';
+
+  // 從 URL 取得預設類型
+  const urlType = new URLSearchParams(window.location.search).get('type');
+  if (urlType === 'lost') setType('lost');
+
+  function setType(type) {
+    currentType = type;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + type).classList.add('active');
+    // 遺失協尋顯示隱藏驗證欄位
+    document.getElementById('secret-field').classList.toggle('hidden', type === 'lost');
+  }
+
+  function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      showAlert('圖片太大囉，請選擇小於 3MB 的圖片');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      uploadedImage = e.target.result;
+      document.getElementById('img-preview-wrap').innerHTML = `
+        <div class="upload-preview">
+          <img src="${uploadedImage}" alt="預覽">
+          <button type="button" class="upload-remove" onclick="removeImage()">✕</button>
+        </div>`;
+      document.getElementById('upload-zone').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeImage() {
+    uploadedImage = '';
+    document.getElementById('img-preview-wrap').innerHTML = '';
+    document.getElementById('image-file').value = '';
+    document.getElementById('upload-zone').style.display = 'block';
+  }
+
+  function showAlert(msg, type = 'danger') {
+    const box = document.getElementById('alert-box');
+    box.className = `alert alert-${type}`;
+    box.textContent = msg;
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function handleSubmit() {
+    const session = getSession();
+    const title = document.getElementById('title').value.trim();
+    const category = document.getElementById('category').value;
+    const location = document.getElementById('location').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const secretHint = document.getElementById('secret-hint').value.trim();
+
+    if (!title || !category || !location || !description) {
+      showAlert('請填寫所有必填欄位（紅色 * 標示）');
+      return;
+    }
+
+    try {
+      const id = await addPost({
+        type: currentType,
+        title, category, location, description,
+        imageUrl: uploadedImage,
+        secretHint,
+        authorId: session.id,
+        authorName: session.name,
+      });
+
+      showAlert('✅ 發布成功！即將前往貼文頁面...', 'success');
+      setTimeout(() => window.location.href = `detail.html?id=${id}`, 1500);
+    } catch (err) {
+      showAlert('❌ 發布失敗: ' + err.message);
+    }
+  }
+</script>
+</body>
+</html>

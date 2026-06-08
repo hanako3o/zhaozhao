@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>貼文詳情 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="max-width:760px; padding-top:2rem; padding-bottom:3rem;">
+  <div id="content">
+    <div class="text-muted text-center" style="padding:3rem 0;">載入中...</div>
+  </div>
+</div>
+
+<!-- 認領申請 Modal -->
+<div class="modal-overlay hidden" id="claim-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="claim-modal-title">🙋 認領申請</h3>
+      <button class="modal-close" onclick="closeModal('claim-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-2" id="claim-modal-desc">為防止誤領，請填寫以下驗證資訊。管理員將人工審核後通知結果。</p>
+      <div id="claim-alert" class="hidden"></div>
+      <div class="form-group">
+        <label>您的學號</label>
+        <input type="text" id="claim-student-id" placeholder="請輸入您的學號">
+      </div>
+      <div class="form-group">
+        <label id="claim-detail-label">物品辨識細節 <span class="req">*</span></label>
+        <textarea id="claim-detail" placeholder="請描述該物品上的特徵，例如：貼紙位置、刻字內容、悠遊卡末四碼等..." rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label>聯絡方式</label>
+        <input type="text" id="claim-contact" placeholder="IG / LINE ID 或其他聯絡方式">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('claim-modal')">取消</button>
+      <button class="btn btn-primary" onclick="submitClaim()">送出申請</button>
+    </div>
+  </div>
+</div>
+
+<!-- 私訊 Modal -->
+<div class="modal-overlay hidden" id="chat-modal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3>💬 私訊發布者</h3>
+      <button class="modal-close" onclick="closeModal('chat-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="輸入訊息..." onkeydown="if(event.key==='Enter') sendMsg()">
+        <button class="btn btn-primary" onclick="sendMsg()">送出</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  renderNavbar('list');
+
+  const postId = new URLSearchParams(window.location.search).get('id');
+  const session = getSession();
+  let currentPost = null;
+  let myConvs = [];
+
+  async function initDetail() {
+    if (!postId) {
+      document.getElementById('content').innerHTML = '<p class="text-muted">找不到貼文</p>';
+      return;
+    }
+    
+    currentPost = await getPost(postId);
+    if (!currentPost) {
+      document.getElementById('content').innerHTML = '<p class="text-muted">找不到此貼文</p>';
+      return;
+    }
+
+    if (session) {
+      myConvs = await getMyConversations(session.id);
+      // Fetch last message for each conversation to render preview synchronously
+      for (let c of myConvs) {
+        const msgs = await getMessages(c.postId, c.participants[0].id, c.participants[1].id);
+        c.lastMessage = msgs[msgs.length - 1] || null;
+      }
+    }
+
+    renderDetail();
+
+    // 從個人中心點對話進來，自動開啟私訊框
+    if (new URLSearchParams(window.location.search).get('chat') && session) {
+      setTimeout(openChat, 300);
+    }
+  }
+
+  function renderDetail() {
+    const post = currentPost;
+    const isAuthor = session && session.id === post.authorId;
+    const isAdminUser = isAdmin();
+    const canAction = session && !isAuthor && post.status === STATUS.PENDING;
+    const canChat = session && !isAuthor;
+
+    // 依貼文類型決定按鈕文字
+    const actionLabel = post.type === 'found' ? '🙋 我要認領' : '🙌 我找到了';
+
+    document.getElementById('content').innerHTML = `
+      <a href="list.html" class="btn btn-secondary btn-sm mb-2">← 返回列表</a>
+
+      <div class="card mt-2">
+        ${post.imageUrl ? `
+          <div style="max-height:360px; overflow:hidden; background:var(--sand-100);">
+            <img src="${post.imageUrl}" alt="${post.title}"
+              style="width:100%; max-height:360px; object-fit:cover;"
+              onerror="this.parentElement.innerHTML='<div style=height:120px;display:flex;align-items:center;justify-content:center;font-size:3rem;>${categoryIcon(post.category)}</div>'">
+          </div>
+        ` : `
+          <div style="height:120px; background:var(--sand-100); display:flex; align-items:center; justify-content:center; font-size:3.5rem;">
+            ${categoryIcon(post.category)}
+          </div>
+        `}
+
+        <div class="card-body">
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+            ${typeBadge(post.type)} ${statusBadge(post.status)}
+            <span class="badge" style="background:var(--sand-100);color:var(--ink-600);">${post.category}</span>
+          </div>
+
+          <h1 style="font-size:1.4rem; font-weight:700; margin-bottom:1rem;">${post.title}</h1>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1.25rem;">
+            <div style="font-size:0.875rem;">
+              <span style="color:var(--ink-500);">📍 地點</span><br>
+              <strong>${post.location}</strong>
+            </div>
+            <div style="font-size:0.875rem;">
+              <span style="color:var(--ink-500);">👤 發布者</span><br>
+              <strong>${post.authorName}</strong>
+            </div>
+            <div style="font-size:0.875rem;">
+              <span style="color:var(--ink-500);">🕐 發布時間</span><br>
+              <strong>${timeAgo(post.createdAt)}</strong>
+            </div>
+          </div>
+
+          <div style="background:var(--sand-50); border-radius:var(--radius); padding:1rem; margin-bottom:1.25rem;">
+            <div style="font-size:0.8rem; color:var(--ink-500); margin-bottom:0.4rem;">物品描述</div>
+            <p style="font-size:0.95rem; line-height:1.7;">${post.description}</p>
+          </div>
+
+          ${post.status === STATUS.CLOSED ? `
+            <div class="alert alert-success">✅ 此貼文已結案，物品已找到主人。</div>
+          ` : ''}
+
+          ${post.status === STATUS.REVIEWING ? `
+            <div class="alert alert-info">🔍 認領申請審核中，請等候管理員處理。</div>
+          ` : ''}
+
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            ${canAction ? `<button class="btn btn-success" onclick="openModal('claim-modal')">${actionLabel}</button>` : ''}
+            ${canChat ? `<button class="btn btn-secondary" onclick="openChat()">💬 私訊發布者</button>` : ''}
+            ${isAdminUser ? `
+              <button class="btn btn-danger btn-sm" onclick="adminDelete()">🗑 刪除貼文</button>
+              ${post.status === STATUS.REVIEWING ? `<button class="btn btn-success btn-sm" onclick="adminClose()">✅ 結案</button>` : ''}
+            ` : ''}
+            ${!session ? `<p class="text-sm text-muted" style="align-self:center;"><a href="login.html">登入</a>後才能${post.type === 'found' ? '認領' : '回報'}或私訊</p>` : ''}
+          </div>
+
+          ${isAuthor ? renderAuthorInbox() : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Modal ──
+  function openModal(id) {
+    if (id === 'claim-modal') {
+      const post = currentPost;
+      const isFound = post.type === 'found';
+      document.getElementById('claim-modal-title').textContent = isFound ? '🙋 認領申請' : '🙌 回報協尋';
+      document.getElementById('claim-modal-desc').textContent = isFound
+        ? '為防止誤領，請填寫以下驗證資訊。管理員將人工審核後通知結果。'
+        : '您找到了這個遺失物嗎？請填寫您撿到的情況，發布者與管理員將會收到通知。';
+      document.getElementById('claim-detail-label').innerHTML = isFound
+        ? '物品辨識細節 <span class="req">*</span>'
+        : '撿到的情況說明 <span class="req">*</span>';
+      document.getElementById('claim-detail').placeholder = isFound
+        ? '請描述該物品上的特徵，例如：貼紙位置、刻字內容、悠遊卡末四碼等...'
+        : '請描述您在哪裡、何時撿到，以及物品目前狀況...';
+    }
+    document.getElementById(id).classList.remove('hidden');
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+    if (id === 'chat-modal') { activePartner = null; renderDetail(); }
+  }
+
+  // ── 認領申請 ──
+  async function submitClaim() {
+    const studentId = document.getElementById('claim-student-id').value.trim();
+    const detail = document.getElementById('claim-detail').value.trim();
+    const contact = document.getElementById('claim-contact').value.trim();
+
+    if (!detail) {
+      const box = document.getElementById('claim-alert');
+      box.className = 'alert alert-danger';
+      box.textContent = '請填寫物品辨識細節';
+      return;
+    }
+
+    const post = currentPost;
+    await addClaim(postId, {
+      claimantId: session.id,
+      claimantName: session.name,
+      studentId, detail, contact,
+    });
+
+    closeModal('claim-modal');
+    alert(post.type === 'found'
+      ? '✅ 認領申請已送出，請等候管理員審核！'
+      : '✅ 已回報您找到此物品，發布者與管理員將會收到通知！');
+    await initDetail();
+  }
+
+  // ── 作者收件匣（誰私訊了這則貼文）──
+  function renderAuthorInbox() {
+    const convs = myConvs.filter(c => c.postId === postId);
+    if (convs.length === 0) {
+      return `
+        <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid var(--sand-100);">
+          <h3 style="font-family:var(--font-display); font-size:1.05rem; font-weight:700; margin-bottom:0.5rem;">💬 收到的私訊</h3>
+          <p class="text-sm text-muted">目前還沒有人私訊這則貼文。</p>
+        </div>`;
+    }
+    return `
+      <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid var(--sand-100);">
+        <h3 style="font-family:var(--font-display); font-size:1.05rem; font-weight:700; margin-bottom:0.75rem;">💬 收到的私訊（${convs.length}）</h3>
+        <div style="display:flex; flex-direction:column; gap:0.6rem;">
+          ${convs.map(c => {
+            const partner = c.participants.find(p => p.id !== session.id) || { name: '未知', id: '' };
+            const last = c.lastMessage;
+            const preview = last ? `${last.senderId === session.id ? '你：' : ''}${last.text}` : '尚無訊息';
+            return `
+              <div class="conv-item" onclick="openChatWith('${partner.id}','${partner.name.replace(/'/g, "\\'")}')">
+                <div class="conv-dot">💬</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; justify-content:space-between; gap:0.5rem;">
+                    <strong style="font-size:0.92rem;">${partner.name}</strong>
+                    <span class="text-muted text-sm">${timeAgo(c.lastTime)}</span>
+                  </div>
+                  <div class="text-sm" style="color:var(--ink-600); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${preview}</div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  // ── 私訊 ──
+  let activePartner = null;
+
+  function openChatWith(partnerId, partnerName) {
+    activePartner = { id: partnerId, name: partnerName };
+    openModal('chat-modal');
+    loadMessages();
+    setTimeout(() => document.getElementById('chat-input').focus(), 100);
+  }
+
+  function getChatPartner() {
+    if (activePartner) return activePartner;
+    const post = currentPost;
+    const urlChat = new URLSearchParams(window.location.search).get('chat');
+    if (urlChat) {
+      const conv = myConvs.find(c =>
+        c.postId === postId && c.participants.some(p => p.id === urlChat));
+      const partner = conv?.participants.find(p => p.id === urlChat);
+      return { id: urlChat, name: partner?.name || urlChat };
+    }
+    return { id: post.authorId, name: post.authorName };
+  }
+
+  function openChat() {
+    openModal('chat-modal');
+    loadMessages();
+    setTimeout(() => document.getElementById('chat-input').focus(), 100);
+  }
+
+  async function loadMessages() {
+    const partner = getChatPartner();
+    const msgs = await getMessages(postId, session.id, partner.id);
+    const container = document.getElementById('chat-messages');
+    document.querySelector('#chat-modal .modal-header h3').textContent = `💬 與 ${partner.name} 的對話`;
+    if (msgs.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--ink-400);font-size:0.85rem;padding:1rem;">還沒有訊息，發送第一則吧！</div>';
+      return;
+    }
+    container.innerHTML = msgs.map(m => {
+      const isMe = m.senderId === session.id;
+      return `
+        <div>
+          <div class="chat-bubble ${isMe ? 'me' : 'them'}">
+            ${m.text}
+            <div class="chat-bubble-meta">${isMe ? '你' : m.senderName} · ${timeAgo(m.time)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function sendMsg() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    const partner = getChatPartner();
+    await sendMessage(postId, session.id, session.name, partner.id, partner.name, text);
+    input.value = '';
+    await loadMessages();
+  }
+
+  // ── 管理員操作 ──
+  async function adminDelete() {
+    if (confirm('確定要刪除此貼文嗎？')) {
+      await deletePost(postId);
+      window.location.href = 'list.html';
+    }
+  }
+
+  async function adminClose() {
+    if (confirm('確定要將此貼文結案嗎？')) {
+      await updatePostStatus(postId, STATUS.CLOSED);
+      await initDetail();
+    }
+  }
+
+  initDetail();
+</script>
+</body>
+</html>

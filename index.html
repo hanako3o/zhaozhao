@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>找找 — 校園失物招領平台</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="banner">
+  <span class="banner-deco" style="top:1rem; left:8%;">🔑</span>
+  <span class="banner-deco" style="top:3rem; right:10%; font-size:3.5rem;">👝</span>
+  <span class="banner-deco" style="bottom:3rem; left:14%; font-size:3rem;">📱</span>
+  <span class="banner-deco" style="top:1.5rem; right:30%; font-size:2.5rem;">🫙</span>
+  <div class="banner-logo-wrap">
+    <img src="logo-icon.png" alt="找找" class="banner-logo-icon">
+    <img src="logo-text.png" alt="找找" class="banner-logo-text">
+  </div>
+  <p>撿到東西？弄丟了什麼？在這裡發布一則貼文，<br>讓校園裡的每件物品都能順利回家 🏠</p>
+  <div class="banner-actions">
+    <a href="add.html?type=found" class="btn btn-white btn-lg" id="btn-found">✋ 我撿到東西</a>
+    <a href="add.html?type=lost" class="btn btn-outline btn-lg" id="btn-lost">😥 我掉了東西</a>
+    <a href="list.html" class="btn btn-outline btn-lg">📋 瀏覽全部</a>
+  </div>
+</div>
+
+<div class="container" style="padding-top:2rem; padding-bottom:3rem;">
+
+  <!-- 公告 -->
+  <div class="alert alert-info mb-3">
+    📢 <strong>公告：</strong>本系統僅供校內同學使用，認領需通過身份驗證，請誠實填寫資料。有任何問題請洽學務處。
+  </div>
+
+  <!-- 統計 -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1.2rem; margin-bottom:2.5rem;">
+    <div class="stat-card fade-up" style="animation-delay:0.05s;">
+      <div class="stat-num" style="color:var(--green);" id="stat-found">0</div>
+      <div class="stat-label">🟢 拾獲招領中</div>
+    </div>
+    <div class="stat-card fade-up" style="animation-delay:0.12s;">
+      <div class="stat-num" style="color:var(--amber);" id="stat-lost">0</div>
+      <div class="stat-label">🟡 遺失協尋中</div>
+    </div>
+    <div class="stat-card fade-up" style="animation-delay:0.19s;">
+      <div class="stat-num" style="color:var(--primary);" id="stat-closed">0</div>
+      <div class="stat-label">🎉 成功結案</div>
+    </div>
+  </div>
+
+  <!-- 最新貼文 -->
+  <div class="d-flex align-center justify-between mb-2">
+    <h2 style="font-family:var(--font-display); font-size:1.45rem; font-weight:800; color:var(--ink-900);">✨ 最新動態</h2>
+    <a href="list.html" class="btn btn-secondary btn-sm">查看全部 →</a>
+  </div>
+
+  <div class="grid-2" id="recent-posts">
+    <div style="color:var(--ink-400); padding:2rem 0;">載入中...</div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  renderNavbar('home');
+
+  async function initHome() {
+    const posts = await getPosts();
+    document.getElementById('stat-found').textContent = posts.filter(p => p.type === 'found' && p.status !== STATUS.CLOSED).length;
+    document.getElementById('stat-lost').textContent = posts.filter(p => p.type === 'lost' && p.status !== STATUS.CLOSED).length;
+    document.getElementById('stat-closed').textContent = posts.filter(p => p.status === STATUS.CLOSED).length;
+
+    // 最新 6 筆
+    const recent = posts.slice(0, 6);
+    const container = document.getElementById('recent-posts');
+    if (recent.length === 0) {
+      container.innerHTML = '<p class="text-muted">目前尚無貼文，成為第一個發布的人吧！</p>';
+    } else {
+      container.innerHTML = recent.map(p => `
+        <div class="item-card" onclick="location.href='detail.html?id=${p.id}'">
+          <div class="item-card-img">
+            ${p.imageUrl
+              ? `<img src="${p.imageUrl}" alt="${p.title}" onerror="this.parentElement.textContent='${categoryIcon(p.category)}'">`
+              : `<span>${categoryIcon(p.category)}</span>`}
+          </div>
+          <div class="item-card-body">
+            <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem;">
+              ${typeBadge(p.type)} ${statusBadge(p.status)}
+            </div>
+            <div class="item-card-title">${p.title}</div>
+            <div class="item-card-meta">
+              <span>📍 ${p.location}</span>
+              <span>🕐 ${timeAgo(p.createdAt)}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+  initHome();
+</script>
+</body>
+</html>

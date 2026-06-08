@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登入 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="max-width:430px; padding-top:3rem; padding-bottom:3rem;">
+  <div class="card fade-up">
+    <div class="card-body">
+      <div class="auth-icon">👋</div>
+      <h2 style="font-family:var(--font-display); font-size:1.5rem; font-weight:800; text-align:center; margin-bottom:0.25rem;">歡迎回來</h2>
+      <p class="text-muted text-sm text-center mb-3">使用學號登入，管理員請輸入管理員帳號</p>
+
+      <div id="alert-box" class="hidden"></div>
+
+      <div class="form-group">
+        <label for="student-id">學號 / 帳號</label>
+        <input type="text" id="student-id" placeholder="例：B11234001" autocomplete="username">
+      </div>
+
+      <div class="form-group">
+        <label for="password">密碼</label>
+        <input type="password" id="password" placeholder="請輸入密碼" autocomplete="current-password">
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="handleLogin()">登入</button>
+
+      <p class="text-center text-sm mt-2" style="color:var(--ink-500);">
+        還沒有帳號？<a href="register.html">立即註冊</a>
+      </p>
+      <p class="text-center text-sm mt-1" style="color:var(--ink-400);">
+        或 <a href="list.html">不登入，直接瀏覽</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  
+  renderNavbar('');
+
+  // 已登入則導回首頁
+  if (isLoggedIn()) window.location.href = 'index.html';
+
+  function showAlert(msg, type = 'danger') {
+    const box = document.getElementById('alert-box');
+    box.className = `alert alert-${type}`;
+    box.textContent = msg;
+  }
+
+  async function handleLogin() {
+    const id = document.getElementById('student-id').value.trim();
+    const pw = document.getElementById('password').value;
+    if (!id || !pw) { showAlert('請填寫學號與密碼'); return; }
+
+    const result = await loginUser(id, pw);
+    if (result.ok) {
+      window.location.href = result.isAdmin ? 'admin.html' : 'index.html';
+    } else {
+      showAlert(result.msg);
+    }
+  }
+
+  // Enter 觸發登入
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+</script>
+</body>
+</html>

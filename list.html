@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>失物列表 — 找找</title>
+  <link rel="icon" type="image/png" href="logo-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="container" style="padding-top:1.5rem; padding-bottom:3rem;">
+
+  <div class="page-header">
+    <h2>失物列表</h2>
+    <p>瀏覽所有拾獲招領與遺失協尋的貼文</p>
+  </div>
+
+  <!-- 搜尋與篩選 -->
+  <div class="search-bar">
+    <div class="search-input-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="搜尋物品名稱或特徵..." oninput="renderList()">
+    </div>
+    <select id="filter-category" onchange="renderList()" style="width:auto;">
+      <option value="">所有分類</option>
+      <option value="3C產品">3C產品</option>
+      <option value="證件">證件</option>
+      <option value="文具">文具</option>
+      <option value="水壺">水壺</option>
+      <option value="衣物">衣物</option>
+      <option value="鑰匙">鑰匙</option>
+      <option value="錢包">錢包</option>
+      <option value="書籍">書籍</option>
+      <option value="其他">其他</option>
+    </select>
+    <select id="sort-order" onchange="renderList()" style="width:auto;">
+      <option value="newest">🕐 由新到舊</option>
+      <option value="oldest">🕐 由舊到新</option>
+    </select>
+  </div>
+
+  <!-- 類型 Tab -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-all" onclick="setTab('all')">全部</button>
+    <button class="tab-btn" id="tab-found" onclick="setTab('found')">🟢 拾獲招領</button>
+    <button class="tab-btn" id="tab-lost" onclick="setTab('lost')">🟡 遺失協尋</button>
+  </div>
+
+  <!-- 狀態子 Tab -->
+  <div class="tabs" style="max-width:420px;">
+    <button class="tab-btn active" id="stab-all" onclick="setStatusTab('all')">全部狀態</button>
+    <button class="tab-btn" id="stab-pending" onclick="setStatusTab('pending')">待處理</button>
+    <button class="tab-btn" id="stab-closed" onclick="setStatusTab('closed')">已結案</button>
+  </div>
+
+  <div id="post-count" class="text-muted text-sm mb-2"></div>
+  <div class="grid-2" id="post-list"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+  renderNavbar('list');
+
+  let currentTab = 'all';
+  let statusTab = 'all';
+  let allPosts = [];
+
+  async function initList() {
+    allPosts = await getPosts();
+    renderList();
+  }
+
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('#tab-all, #tab-found, #tab-lost').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    renderList();
+  }
+
+  function setStatusTab(tab) {
+    statusTab = tab;
+    document.querySelectorAll('#stab-all, #stab-pending, #stab-closed').forEach(b => b.classList.remove('active'));
+    document.getElementById('stab-' + tab).classList.add('active');
+    renderList();
+  }
+
+  function renderList() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const cat = document.getElementById('filter-category').value;
+    const sortOrder = document.getElementById('sort-order').value;
+
+    let posts = [...allPosts];
+
+    if (currentTab !== 'all') posts = posts.filter(p => p.type === currentTab);
+    if (cat) posts = posts.filter(p => p.category === cat);
+
+    // 狀態子分類：待處理（待認領+審核中）/ 已結案
+    if (statusTab === 'pending') posts = posts.filter(p => p.status !== STATUS.CLOSED);
+    if (statusTab === 'closed') posts = posts.filter(p => p.status === STATUS.CLOSED);
+
+    if (q) posts = posts.filter(p =>
+      p.title.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.location.toLowerCase().includes(q)
+    );
+
+    // 排序
+    posts.sort((a, b) => sortOrder === 'oldest'
+      ? a.createdAt - b.createdAt
+      : b.createdAt - a.createdAt);
+
+    const container = document.getElementById('post-list');
+    document.getElementById('post-count').textContent = `共 ${posts.length} 筆結果`;
+
+    if (posts.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column:1/-1; text-align:center; padding:3rem 0; color:var(--ink-400);">
+          <div style="font-size:2.5rem;">🔍</div>
+          <p style="margin-top:0.75rem;">沒有找到符合的貼文</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = posts.map((p, i) => `
+      <div class="item-card fade-up" style="animation-delay:${Math.min(i * 0.05, 0.4)}s;" onclick="location.href='detail.html?id=${p.id}'">
+        <div class="item-card-img">
+          ${p.imageUrl
+            ? `<img src="${p.imageUrl}" alt="${p.title}" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
+            : `<span style="font-size:3rem;">${categoryIcon(p.category)}</span>`}
+        </div>
+        <div class="item-card-body">
+          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.55rem;">
+            ${typeBadge(p.type)} ${statusBadge(p.status)}
+            <span class="badge badge-cat">${p.category}</span>
+          </div>
+          <div class="item-card-title">${p.title}</div>
+          <div class="item-card-meta">
+            <span>📍 ${p.location}</span>
+            <span>👤 ${p.authorName}</span>
+            <span>🕐 ${timeAgo(p.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  initList();
+</script>
+</body>
+</html>
