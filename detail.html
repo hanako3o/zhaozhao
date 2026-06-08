@@ -215,7 +215,6 @@
     if (id === 'chat-modal') { activePartner = null; renderDetail(); }
   }
 
-  // ── 認領申請 ──
   async function submitClaim() {
     const studentId = document.getElementById('claim-student-id').value.trim();
     const detail = document.getElementById('claim-detail').value.trim();
@@ -229,17 +228,22 @@
     }
 
     const post = currentPost;
-    await addClaim(postId, {
-      claimantId: session.id,
-      claimantName: session.name,
-      studentId, detail, contact,
-    });
+    try {
+      await addClaim(postId, {
+        claimantId: session.id,
+        claimantName: session.name,
+        studentId, detail, contact,
+      });
 
-    closeModal('claim-modal');
-    alert(post.type === 'found'
-      ? '✅ 認領申請已送出，請等候管理員審核！'
-      : '✅ 已回報您找到此物品，發布者與管理員將會收到通知！');
-    await initDetail();
+      closeModal('claim-modal');
+      alert(post.type === 'found'
+        ? '✅ 認領申請已送出，請等候管理員審核！'
+        : '✅ 已回報您找到此物品，發布者與管理員將會收到通知！');
+      await initDetail();
+    } catch (err) {
+      console.error(err);
+      alert('❌ 送出申請失敗: ' + (err.message || err));
+    }
   }
 
   // ── 作者收件匣（誰私訊了這則貼文）──

@@ -244,7 +244,7 @@ async function addClaim(postId, claim) {
     id: newId,
     post_id: postId,
     student_id: claim.studentId,
-    name: claim.name,
+    name: claim.claimantName || claim.name || '匿名',
     contact: claim.contact,
     proof: claim.detail,
     status: 'pending',
