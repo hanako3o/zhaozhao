@@ -526,7 +526,10 @@ function renderNavbar(activePage) {
           <div class="avatar">${initial}</div>
           <span class="nav-profile-text">個人中心</span>
         </a>
-        <a href="#" class="nav-support" onclick="openGlobalChat('admin', '管理員', 'support', '聯絡客服'); return false;">客服</a>
+        ${session.isAdmin
+          ? `<a href="admin.html" class="nav-support">客服管理</a>`
+          : `<a href="#" class="nav-support" onclick="openGlobalChat('admin', '管理員', 'support', '聯絡客服'); return false;">客服</a>`
+        }
         <button onclick="handleLogout()" style="color:var(--danger);font-weight:500;">登出</button>
       </div>
     `;
