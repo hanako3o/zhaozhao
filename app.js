@@ -560,6 +560,8 @@ function renderNavbar(activePage) {
       ${rightSection}
     </div>
   `;
+
+  if (session && !session.isAdmin) initChatWidget();
 }
 
 function toggleNavMenu() {
@@ -579,6 +581,152 @@ async function handleLogout() {
   if (!confirm('確定要登出嗎？')) return;
   await logoutUser();
   window.location.href = 'index.html';
+}
+
+// ── Floating Chat Widget ──
+let cwpCurrentPartner = null;
+let cwpCurrentPostId = null;
+let cwpMsgInterval = null;
+
+function initChatWidget() {
+  if (document.getElementById('chat-widget')) return;
+  const widget = document.createElement('div');
+  widget.id = 'chat-widget';
+  widget.innerHTML = `
+    <div id="chat-widget-panel" style="display:none;">
+      <div id="cwp-list">
+        <div class="cwp-header">
+          <span class="cwp-title">💬 我的私訊</span>
+          <button onclick="toggleChatWidget()">✕</button>
+        </div>
+        <div id="cwp-conversations" style="max-height:360px; overflow-y:auto;">
+          <div style="padding:1rem; text-align:center; color:var(--ink-400); font-size:0.83rem;">載入中...</div>
+        </div>
+      </div>
+      <div id="cwp-chat" style="display:none;">
+        <div class="cwp-header">
+          <button onclick="showCWPList()">←</button>
+          <span class="cwp-title" id="cwp-chat-title" style="margin-left:0.3rem;"></span>
+          <a id="cwp-post-link" href="#" target="_blank">查看原貼文 →</a>
+          <button onclick="toggleChatWidget()" style="margin-left:0.3rem;">✕</button>
+        </div>
+        <div id="cwp-messages"></div>
+        <div class="cwp-input-row">
+          <input type="text" id="cwp-input" placeholder="輸入訊息..." onkeydown="if(event.key==='Enter') sendCWPMsg()">
+          <button onclick="sendCWPMsg()">送出</button>
+        </div>
+      </div>
+    </div>
+    <button id="chat-widget-btn" onclick="toggleChatWidget()" title="私訊">
+      💬
+      <span id="cwp-badge" style="display:none;"></span>
+    </button>
+  `;
+  document.body.appendChild(widget);
+}
+
+function toggleChatWidget() {
+  const panel = document.getElementById('chat-widget-panel');
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    showCWPList();
+    loadCWPConversations();
+  } else {
+    clearInterval(cwpMsgInterval);
+    cwpMsgInterval = null;
+  }
+}
+
+async function loadCWPConversations() {
+  const session = getSession();
+  if (!session) return;
+  const container = document.getElementById('cwp-conversations');
+  if (!container) return;
+
+  const convs = await getMyConversations(session.id);
+  if (convs.length === 0) {
+    container.innerHTML = '<div style="padding:1.2rem; text-align:center; color:var(--ink-400); font-size:0.83rem;">目前沒有任何對話</div>';
+    return;
+  }
+
+  const items = await Promise.all(convs.map(async c => {
+    const partner = c.participants.find(p => p.id !== session.id) || { name: '未知', id: '' };
+    const msgs = await getMessages(c.postId, session.id, partner.id);
+    const last = msgs[msgs.length - 1];
+    const preview = last ? `${last.senderId === session.id ? '你：' : ''}${last.text}` : '尚無訊息';
+    return { c, partner, preview };
+  }));
+
+  container.innerHTML = items.map(({ c, partner, preview }) => `
+    <div class="cwp-conv-item" onclick="openCWPChat('${c.postId}','${partner.id}','${partner.name.replace(/'/g, "\\'")}')">
+      <div class="cwp-conv-dot">💬</div>
+      <div style="flex:1; min-width:0;">
+        <div class="cwp-conv-name">${partner.name}</div>
+        <div class="cwp-conv-preview">${preview}</div>
+      </div>
+      <a class="cwp-conv-link" href="detail.html?id=${c.postId}" target="_blank" onclick="event.stopPropagation()">查看貼文 →</a>
+    </div>
+  `).join('');
+}
+
+function openCWPChat(postId, partnerId, partnerName) {
+  cwpCurrentPartner = { id: partnerId, name: partnerName };
+  cwpCurrentPostId = postId;
+  document.getElementById('cwp-list').style.display = 'none';
+  document.getElementById('cwp-chat').style.display = 'block';
+  document.getElementById('cwp-chat-title').textContent = partnerName;
+  document.getElementById('cwp-post-link').href = `detail.html?id=${postId}`;
+  loadCWPMessages();
+  clearInterval(cwpMsgInterval);
+  cwpMsgInterval = setInterval(loadCWPMessages, 3000);
+}
+
+function showCWPList() {
+  clearInterval(cwpMsgInterval);
+  cwpMsgInterval = null;
+  const list = document.getElementById('cwp-list');
+  const chat = document.getElementById('cwp-chat');
+  if (list) list.style.display = 'block';
+  if (chat) chat.style.display = 'none';
+  loadCWPConversations();
+}
+
+async function loadCWPMessages() {
+  const session = getSession();
+  if (!session || !cwpCurrentPartner || !cwpCurrentPostId) return;
+  const container = document.getElementById('cwp-messages');
+  if (!container) return;
+
+  const msgs = await getMessages(cwpCurrentPostId, session.id, cwpCurrentPartner.id);
+  const wasAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 15;
+
+  container.innerHTML = msgs.length === 0
+    ? '<div style="text-align:center; color:var(--ink-400); font-size:0.82rem; padding:1rem;">還沒有訊息，發送第一則吧！</div>'
+    : msgs.map(m => {
+        const isMe = m.senderId === session.id;
+        return `
+          <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'}; width:100%;">
+            <div class="chat-bubble ${isMe ? 'me' : 'them'}" style="margin:0; font-size:0.85rem;">
+              ${m.text}
+              <div class="chat-bubble-meta" style="text-align:${isMe ? 'right' : 'left'};">${isMe ? '你' : m.senderName} · ${timeAgo(m.time)}</div>
+            </div>
+          </div>`;
+      }).join('');
+
+  if (wasAtBottom || container.scrollTop === 0) container.scrollTop = container.scrollHeight;
+}
+
+async function sendCWPMsg() {
+  const session = getSession();
+  if (!session || !cwpCurrentPartner || !cwpCurrentPostId) return;
+  const input = document.getElementById('cwp-input');
+  const text = input.value.trim();
+  if (!text) return;
+  await sendMessage(cwpCurrentPostId, session.id, session.name, cwpCurrentPartner.id, cwpCurrentPartner.name, text);
+  input.value = '';
+  await loadCWPMessages();
 }
 
 // ── 權限守衛 ──
