@@ -109,6 +109,21 @@
     document.getElementById('secret-field').classList.toggle('hidden', type === 'lost');
   }
 
+  function compressImage(dataUrl, maxWidth = 1200, quality = 0.8) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = dataUrl;
+    });
+  }
+
   function handleImageUpload(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -120,26 +135,17 @@
     const maxNewFiles = 5 - uploadedImages.length;
     const filesToUpload = Array.from(files).slice(0, maxNewFiles);
 
-    let loadedCount = 0;
     if (filesToUpload.length === 0) {
       document.getElementById('image-file').value = '';
       return;
     }
 
+    let loadedCount = 0;
     filesToUpload.forEach(file => {
-      if (file.size > 3 * 1024 * 1024) {
-        showAlert(`「${file.name}」太大囉，請選擇小於 3MB 的圖片`, 'danger');
-        loadedCount++;
-        if (loadedCount === filesToUpload.length) {
-          renderPreviews();
-          document.getElementById('image-file').value = '';
-        }
-        return;
-      }
-
       const reader = new FileReader();
-      reader.onload = e => {
-        uploadedImages.push(e.target.result);
+      reader.onload = async e => {
+        const compressed = await compressImage(e.target.result);
+        uploadedImages.push(compressed);
         loadedCount++;
         if (loadedCount === filesToUpload.length) {
           renderPreviews();

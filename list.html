@@ -130,7 +130,7 @@
       <div class="item-card fade-up" style="animation-delay:${Math.min(i * 0.05, 0.4)}s;" onclick="location.href='detail.html?id=${p.id}'">
         <div class="item-card-img" style="position:relative;">
           ${p.imageUrl && p.imageUrl.length > 0
-            ? `<img src="${p.imageUrl[0]}" alt="${p.title}" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
+            ? `<img src="${p.imageUrl[0]}" alt="${p.title}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=font-size:3rem>${categoryIcon(p.category)}</span>'">`
             : `<span style="font-size:3rem;">${categoryIcon(p.category)}</span>`}
           ${p.imageUrl && p.imageUrl.length > 1
             ? `<div class="image-badge">📷 ${p.imageUrl.length}</div>`
